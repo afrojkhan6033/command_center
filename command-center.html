@@ -1,0 +1,1984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic 24-Hour Command Center</title>
+    <style>
+        :root {
+            --primary-color: #3e3326;
+            --bg-color: #eaddcf;
+            --card-bg: #fdfbf7;
+            --brass-light: #e6d39a;
+            --brass-med: #b09459;
+            --brass-dark: #8c7340;
+            --indicator-red: #a84646;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(#d5c3aa 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--primary-color);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 40px 20px;
+            margin: 0;
+            gap: 40px;
+            overflow-x: hidden;
+        }
+
+        /* --- Clock & Controls --- */
+        .left-column { display: flex; flex-direction: column; gap: 20px; align-items: center; max-width: 100%; position: relative;}
+
+        .clock-container {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 50%;
+            box-shadow: 0 15px 35px rgba(62, 51, 38, 0.2), inset 0 0 10px rgba(0,0,0,0.05);
+            position: relative;
+        }
+
+        canvas { cursor: crosshair; border-radius: 50%; display: block; width: 500px; height: 500px; }
+
+        .digital-clock {
+            position: absolute; top: 0px; left: 0px;
+            font-family: 'Courier New', Courier, monospace; font-weight: bold;
+            font-size: 1.1em; color: var(--primary-color);
+            background: rgba(253, 251, 247, 0.9); padding: 6px 12px;
+            border-radius: 8px; border: 1px solid var(--brass-light);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); z-index: 10; letter-spacing: 1px;
+        }
+
+        .controls {
+            display: flex; flex-wrap: wrap; gap: 15px; align-items: center;
+            background: var(--card-bg); padding: 12px 25px; border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); font-family: 'Segoe UI', sans-serif;
+            font-size: 0.9em; width: 100%; box-sizing: border-box; justify-content: space-between;
+        }
+
+        .color-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 320px; }
+        .color-swatch { width: 25px; height: 25px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
+        .color-swatch:hover { transform: scale(1.2); }
+        .color-swatch.active { border-color: var(--primary-color); box-shadow: 0 0 5px rgba(0,0,0,0.4); transform: scale(1.1); }
+
+        .btn-primary { background: var(--primary-color); color: var(--card-bg); border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: background 0.2s; }
+        .btn-primary:hover { background: #5a4b39; }
+        .btn-secondary { background: transparent; color: var(--primary-color); border: 1px solid var(--primary-color); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: all 0.2s; }
+        .btn-secondary:hover { background: #eee7dc; }
+        .btn-highlight { background: #fff; color: var(--brass-dark); border: 2px solid var(--brass-med); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .btn-highlight:hover { background: var(--brass-med); color: #fff; }
+        .btn-danger { background: #fee; border: 1px solid #fcc; color: #c00; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer; font-weight: bold; }
+        .btn-danger:hover { background: #fcc; }
+
+        /* --- Sync badge (doubles as the Cloud Sync entry point) --- */
+        .sync-badge { display:inline-flex; align-items:center; gap:7px; font-family:'Segoe UI',sans-serif; font-size:0.8em; font-weight:bold; padding:8px 14px; border-radius:20px; white-space:nowrap; border:none; cursor:pointer; transition: all 0.2s; }
+        .sync-badge .dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
+        .sync-local { background:#eee; color:#777; } .sync-local .dot { background:#999; }
+        .sync-syncing { background:#fdf1d6; color:#8a641c; } .sync-syncing .dot { background:#d3a13b; animation: sync-pulse 1s infinite; }
+        .sync-synced { background:#e7f1e5; color:#3a6b3a; } .sync-synced .dot { background:#5b7a5b; }
+        .sync-error { background:#fbe6e6; color:#a84646; } .sync-error .dot { background:#a84646; }
+        @keyframes sync-pulse { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+        /* --- Toasts --- */
+        #toastContainer { position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px; max-width:320px; }
+        .toast { background:var(--card-bg); border-left:5px solid var(--brass-med); border-radius:6px; padding:12px 16px; font-family:'Segoe UI',sans-serif; font-size:0.85em; box-shadow:0 8px 20px rgba(0,0,0,0.2); opacity:0; transform:translateX(20px); transition: all 0.3s ease; }
+        .toast-show { opacity:1; transform:translateX(0); }
+        .toast-success { border-left-color:#5b7a5b; }
+        .toast-error { border-left-color:#a84646; }
+        .toast-warn { border-left-color:#c49a45; }
+        .toast-info { border-left-color:#4a6984; }
+
+        /* --- Scheduler Panel & Date Picker --- */
+        .scheduler-panel {
+            background: var(--card-bg); padding: 30px; border-radius: 12px;
+            box-shadow: 0 15px 35px rgba(62, 51, 38, 0.15); width: 100%; max-width: 450px;
+            min-height: 550px; max-height: 85vh; overflow-y: auto; border: 1px solid #e3d9c8;
+        }
+
+        .date-header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--brass-med); padding-bottom: 15px; margin-bottom: 15px; }
+        .date-center { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .date-center h2 { margin: 0; font-variant: small-caps; letter-spacing: 1px; font-size: 1.3em; text-align: center; }
+        input[type="date"] { font-family: 'Segoe UI', sans-serif; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 8px; color: var(--primary-color); cursor: pointer; font-size: 0.85em; }
+
+        .btn-date-nav { background: transparent; border: 1px solid var(--brass-med); color: var(--primary-color); padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: 'Segoe UI', sans-serif; font-size: 0.85em; transition: background 0.2s; }
+        .btn-date-nav:hover { background: var(--bg-color); }
+
+        .view-toggles { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .view-btn { background: #eee; border: 1px solid #ccc; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 0.85em; font-family: 'Segoe UI', sans-serif; color: #555; font-weight: bold; transition: all 0.2s;}
+        .view-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+        .goal-group-header { margin: 20px 0 10px 0; padding-bottom: 5px; border-bottom: 1px dashed var(--brass-med); font-family: 'Georgia', serif; font-style: italic; color: var(--brass-dark); font-size: 1.1em;}
+
+        /* --- Task Cards --- */
+        .slot-item { background: #ffffff; border-left: 6px solid; padding: 15px; margin-bottom: 15px; border-radius: 6px; box-shadow: 0 3px 8px rgba(0,0,0,0.06); border: 1px solid #eee; border-left-width: 6px; transition: opacity 0.3s, background 0.3s; }
+        .slot-item.completed-card { background: #f4f4f4; opacity: 0.6; }
+        .completed-text { text-decoration: line-through; color: #888 !important; }
+
+        .slot-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .title-group { display: flex; align-items: flex-start; gap: 12px; }
+        .task-checkbox { margin-top: 4px; width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary-color); flex-shrink: 0;}
+        .slot-title { font-size: 1.1em; font-weight: bold; margin: 0; font-family: 'Segoe UI', sans-serif; transition: color 0.3s; word-break: break-word;}
+        .slot-goal-badge { display: inline-block; font-size: 0.7em; background: var(--bg-color); color: var(--primary-color); padding: 2px 6px; border-radius: 4px; margin-top: 4px; border: 1px solid var(--brass-med); font-family: 'Segoe UI', sans-serif; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;}
+        .slot-time { font-size: 0.9em; color: #7f8c8d; font-family: 'Segoe UI', sans-serif; display: block; margin-top: 4px;}
+        .slot-duration { font-size: 0.8em; background: #f0f0f0; padding: 3px 8px; border-radius: 12px; font-family: 'Segoe UI', sans-serif; white-space: nowrap;}
+        .slot-notes { font-size: 0.9em; color: #555; margin: 8px 0 8px 30px; font-style: italic; white-space: pre-wrap;}
+        .unsynced-flag { font-size: 0.62em; background:#fbe6e6; color:#a84646; padding:1px 6px; border-radius:8px; margin-left:8px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; vertical-align:middle; }
+
+        .progress-container { margin: 10px 0 10px 30px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--brass-med); transition: width 0.3s ease; }
+        .subtasks-list { margin: 5px 0 10px 30px; display: flex; flex-direction: column; gap: 4px; }
+        .subtask-item { display: flex; align-items: center; gap: 8px; font-size: 0.85em; font-family: 'Segoe UI', sans-serif; color: #444; }
+        .subtask-checkbox { width: 14px; height: 14px; accent-color: var(--brass-dark); cursor: pointer; }
+
+        .review-box { margin-top: 10px; margin-left: 30px; padding: 10px; background: #fdf6e3; border-left: 3px solid #d3a13b; font-size: 0.85em; font-family: 'Segoe UI', sans-serif; color: #8a641c; white-space: pre-wrap;}
+        .action-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-left: 30px; }
+        .btn-action { background: transparent; border: 1px solid #ccc; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75em; font-family: 'Segoe UI', sans-serif; transition: all 0.2s; }
+        .btn-action:hover { background: #eee; }
+
+        /* --- Unscheduled Backlog Drawer --- */
+        .backlog-drawer {
+            position: fixed; top: 0; right: -400px;
+            width: 350px; max-width: 100vw; height: 100vh;
+            background: var(--card-bg);
+            box-shadow: -5px 0 25px rgba(0,0,0,0.15);
+            transition: right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 100; padding: 30px; box-sizing: border-box;
+            border-left: 2px solid var(--brass-med); overflow-y: auto;
+        }
+        .backlog-drawer.open { right: 0; }
+        .backlog-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--brass-light); padding-bottom: 10px; margin-bottom: 15px;}
+        .backlog-item { background: #fff; border: 1px solid #e3d9c8; border-left: 5px solid var(--brass-med); padding: 15px; margin-bottom: 12px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        .backlog-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.3); z-index: 99; opacity: 0;
+            pointer-events: none; transition: opacity 0.3s;
+        }
+        .backlog-overlay.active { opacity: 1; pointer-events: auto; }
+
+        /* --- Modals (General) --- */
+        dialog { border: 2px solid var(--brass-med); border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); padding: 25px; width: 100%; max-width: 400px; background: var(--card-bg); font-family: 'Segoe UI', sans-serif; }
+        dialog::backdrop { background: rgba(30, 20, 10, 0.6); }
+        dialog h3 { margin-top: 0; font-family: 'Georgia', serif; font-style: italic; border-bottom: 1px solid var(--brass-light); padding-bottom: 10px;}
+
+        input[type="text"], input[type="password"], input[type="time"], textarea, select { width: 100%; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; background: #fff; font-family: 'Segoe UI', sans-serif; }
+        textarea { resize: vertical; min-height: 60px; }
+        select { cursor: pointer; font-weight: bold; color: var(--primary-color); }
+        select option[value="__NEW__"] { background: #f4efeb; font-weight: bold; color: #a84646; }
+
+        .time-inputs { display: flex; gap: 15px; margin-bottom: 5px; }
+        .time-inputs div { flex: 1; }
+        .time-inputs label, .modal-label { font-size: 0.8em; color: #666; font-weight: bold; display: block; margin-top: 8px;}
+        .field-hint { font-size: 0.75em; color: #888; margin-top: -3px; margin-bottom: 8px; }
+
+        #modalSubtasks { margin-bottom: 10px; }
+        .modal-subtask-row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center;}
+        .btn-remove-sub { background: #fee; border: 1px solid #fcc; color: #c00; border-radius: 4px; cursor: pointer; padding: 4px 8px; font-weight: bold; height: 33px;}
+        .btn-add-sub { background: #eee; border: 1px solid #ccc; padding: 6px 8px; font-size: 0.8em; border-radius: 4px; cursor: pointer; width: 100%; margin-bottom: 10px; font-weight: bold;}
+        .btn-add-sub:hover { background: #e0e0e0; }
+
+        .dialog-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;}
+        button.btn-cancel { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #e0e0e0; color: #333; }
+        button.btn-save { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: var(--primary-color); color: var(--card-bg); }
+        button.btn-save:disabled, button.btn-cancel:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* --- Cloud Sync Modal --- */
+        #cloudModal { max-width: 460px; }
+        .auth-tabs { display:flex; gap:8px; margin-bottom:12px; }
+        .auth-tab { flex:1; background:#eee; border:1px solid #ccc; padding:6px; border-radius:4px; cursor:pointer; font-size:0.85em; font-weight:bold; color:#555; }
+        .auth-tab.active { background:var(--primary-color); color:#fff; border-color:var(--primary-color); }
+        .cloud-status-line { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#f4efeb; padding:10px 12px; border-radius:6px; margin-bottom:12px; font-size:0.85em; }
+        .small-link { background:none; border:none; color:var(--brass-dark); text-decoration:underline; cursor:pointer; font-size:0.8em; padding:0; font-family:'Segoe UI',sans-serif; }
+        .cloud-intro { font-size:0.85em; color:#555; line-height:1.5; }
+
+        /* --- AI Advisor Modal Styles --- */
+        #aiModal { max-width: 600px; height: 80vh; flex-direction: column; }
+        #aiModal[open] { display: flex; }
+
+        .chat-container { flex: 1; overflow-y: auto; background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 15px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 12px; }
+        .chat-msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 0.95em; line-height: 1.4; word-wrap: break-word;}
+        .msg-user { background: var(--primary-color); color: #fff; align-self: flex-end; border-bottom-right-radius: 0; }
+        .msg-ai { background: #f4efeb; color: var(--primary-color); align-self: flex-start; border-bottom-left-radius: 0; border: 1px solid var(--brass-light); }
+        .ai-input-area { display: flex; gap: 8px; }
+        .ai-input-area input { margin: 0; flex: 1; }
+        .ai-header-controls { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--brass-light); padding-bottom: 10px; margin-bottom: 15px;}
+        .ai-header-controls h3 { margin: 0; border: none; padding: 0; }
+        .btn-mini { background: #eee; border: 1px solid #ccc; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; cursor: pointer; font-weight: bold; }
+
+        /* General specific modal tweaks */
+        #journalModal, #insightsModal, #goalColorModal { max-width: 650px; }
+        #journalText { height: 350px; background: #fbf9f1; line-height: 1.6; font-family: 'Georgia', serif; font-size: 1.05em; border: 1px solid var(--brass-med); padding: 15px; }
+        #roadmapModal { max-width: 500px; }
+        #aiSettingsModal { max-width: 400px; }
+
+        .roadmap-progress { margin: 15px 0; height: 10px; background: #e3d9c8; border-radius: 5px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
+        .roadmap-progress-bar { height: 100%; background: var(--brass-med); transition: width 0.4s ease; }
+        .milestone-item { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px dashed #e3d9c8; }
+        .milestone-item:last-child { border-bottom: none; }
+        .milestone-text { flex: 1; font-family: 'Segoe UI', sans-serif; font-size: 0.95em; color: var(--primary-color); }
+        .milestone-text.done { text-decoration: line-through; color: #999; }
+        .milestone-check { width: 18px; height: 18px; accent-color: var(--brass-dark); cursor: pointer; margin-top: 2px;}
+
+        /* Advanced Archives Styling */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: #fff; border: 1px solid #e3d9c8; padding: 12px; border-radius: 6px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        .stat-val { font-size: 1.5em; font-family: 'Georgia', serif; font-weight: bold; color: var(--brass-med); margin-bottom: 3px; }
+        .stat-label { font-size: 0.65em; text-transform: uppercase; letter-spacing: 1px; color: #7f8c8d; }
+
+        .archive-section-title { font-family: 'Georgia', serif; font-style: italic; color: var(--brass-dark); font-size: 1.1em; margin: 15px 0 8px 0; border-bottom: 1px dashed var(--brass-light); padding-bottom: 4px; }
+        .goal-breakdown-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; max-height: 180px; overflow-y: auto; padding-right: 5px; }
+        .goal-breakdown-row { background: #fff; padding: 10px 12px; border-radius: 6px; border: 1px solid #e3d9c8; font-family: 'Segoe UI', sans-serif; font-size: 0.85em; display: flex; justify-content: space-between; align-items: center; }
+
+        .heatmap-container { margin-bottom: 20px; padding: 15px; background: #fbf9f1; border-radius: 6px; border: 1px solid #e3d9c8; }
+        .heatmap-container h4 { margin: 0 0 10px 0; font-family: 'Georgia', serif; font-style: italic; color: #555; }
+        .heatmap-grid { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 10px; }
+        .heat-day { width: 16px; height: 16px; border-radius: 2px; background: #eee; flex-shrink: 0; position: relative; border: 1px solid rgba(0,0,0,0.05); cursor: pointer;}
+        .heat-day:hover::after { content: attr(data-info); position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--primary-color); color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 0.75em; white-space: nowrap; z-index: 10; pointer-events: none;}
+        .heat-0 { background: #f4efeb; } .heat-1 { background: #e3d4c1; } .heat-2 { background: #cba87c; } .heat-3 { background: #a67c46; } .heat-4 { background: #6b4d24; }
+
+        .export-section { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 15px; justify-content: flex-start;}
+        .btn-export { background: #fff; border: 1px solid var(--brass-med); color: var(--brass-dark); padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.8em; }
+        .btn-export:hover { background: var(--bg-color); }
+    </style>
+</head>
+<body>
+
+    <div id="toastContainer"></div>
+
+    <div class="backlog-overlay" id="backlogOverlay" onclick="toggleBacklog()"></div>
+
+    <!-- Backlog / Inbox Drawer -->
+    <div class="backlog-drawer" id="backlogDrawer">
+        <div class="backlog-header">
+            <h3 style="margin:0; font-family: 'Georgia', serif; font-style: italic;">📥 Idea Inbox</h3>
+            <button class="btn-cancel" style="padding: 4px 8px; font-size: 0.8em;" onclick="toggleBacklog()">Close</button>
+        </div>
+        <p style="font-size: 0.85em; color: #666; margin-top: 0;">Dump tasks here. Schedule them later.</p>
+        <button class="btn-primary" style="width: 100%; margin-bottom: 15px;" onclick="openBacklogModal()">+ Capture New Idea</button>
+        <div id="backlogList"></div>
+    </div>
+
+    <div class="left-column">
+        <div class="digital-clock" id="digitalClock">12:00:00 AM</div>
+
+        <div class="clock-container">
+            <canvas id="clockCanvas" width="500" height="500"></canvas>
+        </div>
+
+        <div class="controls">
+            <div class="color-group" id="colorPalette">
+                <strong>Inks:</strong>
+                <div class="color-swatch active" style="background-color: #4a6984;" data-color="#4a6984"></div>
+                <div class="color-swatch" style="background-color: #a84646;" data-color="#a84646"></div>
+                <div class="color-swatch" style="background-color: #5b7a5b;" data-color="#5b7a5b"></div>
+                <div class="color-swatch" style="background-color: #c49a45;" data-color="#c49a45"></div>
+                <div class="color-swatch" style="background-color: #6a5075;" data-color="#6a5075"></div>
+                <div class="color-swatch" style="background-color: #d35400;" data-color="#d35400"></div>
+                <div class="color-swatch" style="background-color: #27ae60;" data-color="#27ae60"></div>
+                <div class="color-swatch" style="background-color: #2980b9;" data-color="#2980b9"></div>
+                <div class="color-swatch" style="background-color: #8e44ad;" data-color="#8e44ad"></div>
+                <div class="color-swatch" style="background-color: #2c3e50;" data-color="#2c3e50"></div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <button class="sync-badge sync-local" id="syncBadge" onclick="openCloudModal()"><span class="dot"></span><span id="syncBadgeText">Local Only</span></button>
+                <button class="btn-highlight" onclick="openAIModal()">🤖 Drill Sergeant AI</button>
+                <button class="btn-highlight" onclick="toggleBacklog()">📥 Inbox</button>
+                <button class="btn-secondary" onclick="openRoadmapModal()">🧭 Roadmap</button>
+                <button class="btn-secondary" onclick="openGoalColorModal()">🎨 Goal Inks</button>
+                <button class="btn-secondary" onclick="openJournalModal()">📝 Journal</button>
+                <button class="btn-secondary" onclick="openInsightsModal()">📊 Archives</button>
+                <button class="btn-primary" onclick="openManualTaskModal()">+ Manual</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="scheduler-panel">
+        <div class="date-header-container">
+            <button class="btn-date-nav" onclick="changeDate(-1)">&#8592; Prev</button>
+            <div class="date-center">
+                <h2 id="displayDate">Today</h2>
+                <input type="date" id="datePicker" onchange="setDate(this.value)">
+            </div>
+            <button class="btn-date-nav" onclick="changeDate(1)">Next &#8594;</button>
+        </div>
+
+        <div class="view-toggles">
+            <button id="btnSortTime" class="view-btn active" onclick="setSortMode('time')">Sort by Time</button>
+            <button id="btnSortGoal" class="view-btn" onclick="setSortMode('goal')">Group by Goal</button>
+        </div>
+
+        <div id="slotsList"></div>
+    </div>
+
+    <!-- AI Advisor Modal -->
+    <dialog id="aiModal">
+        <div class="ai-header-controls">
+            <h3>🎖️ Commander's Desk</h3>
+            <div>
+                <button class="btn-danger" onclick="clearAIHistory()">🧹 Clear Memory</button>
+                <button class="btn-mini" onclick="openAISettingsModal()">⚙ Settings</button>
+            </div>
+        </div>
+
+        <div class="chat-container" id="aiChatBox">
+            <div class="chat-msg msg-ai">ATTENTION! I am your commanding officer. Hand over your ledger, stop making excuses, and let's get your execution dialed in. What are we optimizing today?</div>
+        </div>
+
+        <div class="ai-input-area">
+            <input type="text" id="aiUserInput" placeholder="e.g., Sir, add a task to review code tomorrow from 14:00 to 15:30.">
+            <button class="btn-primary" onclick="sendAIMessage()" id="aiSendBtn">Send</button>
+        </div>
+
+        <div class="dialog-buttons" style="margin-top: 10px; padding-top: 10px;">
+            <button class="btn-cancel" onclick="document.getElementById('aiModal').close()">Dismiss</button>
+        </div>
+    </dialog>
+
+    <!-- AI Settings Modal -->
+    <dialog id="aiSettingsModal">
+        <h3>AI Settings</h3>
+        <label class="modal-label">Gemini API Key</label>
+        <input type="password" id="settingsApiKey" placeholder="Paste your Gemini API key">
+        <p class="field-hint">Get a free key at aistudio.google.com/apikey.</p>
+        <label class="modal-label">Model</label>
+        <select id="settingsModel">
+            <option value="gemini-3.6-flash">Gemini 3.6 Flash (recommended)</option>
+            <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (fastest / cheapest)</option>
+            <option value="gemini-3.1-pro">Gemini 3.1 Pro (strongest reasoning)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (legacy)</option>
+            <option value="__custom__">Custom model ID...</option>
+        </select>
+        <input type="text" id="settingsModelCustom" placeholder="e.g. gemini-x-y" style="display:none;">
+        <p class="field-hint">Saved on this device, and synced to the cloud if you're connected.</p>
+        <div class="dialog-buttons">
+            <button class="btn-cancel" onclick="document.getElementById('aiSettingsModal').close()">Cancel</button>
+            <button class="btn-save" onclick="saveAISettings()">Save</button>
+        </div>
+    </dialog>
+
+    <!-- Cloud Sync Modal -->
+    <dialog id="cloudModal">
+        <h3>☁ Cloud Sync &amp; Backup</h3>
+        <div id="cloudModalBody"></div>
+        <div class="dialog-buttons"><button class="btn-cancel" onclick="document.getElementById('cloudModal').close()">Close</button></div>
+    </dialog>
+
+    <!-- Goal Ink Colors Modal -->
+    <dialog id="goalColorModal">
+        <h3>Master Goal Ink Assignments</h3>
+        <p style="font-size: 0.85em; color: #666; margin-top: 0;">Link specific ink colors to your goals. Tasks assigned to these goals will automatically inherit these colors on your clock and ledger — on every device once synced.</p>
+        <div id="goalColorList" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; padding-right: 10px;"></div>
+        <div class="dialog-buttons">
+            <button class="btn-cancel" onclick="document.getElementById('goalColorModal').close()">Cancel</button>
+            <button class="btn-save" onclick="saveGoalColors()">Save Ink Links</button>
+        </div>
+    </dialog>
+
+    <!-- Backlog Modal -->
+    <dialog id="backlogModal">
+        <h3>Capture Idea</h3>
+        <label class="modal-label">Master Goal Link</label>
+        <select id="backlogGoal"></select>
+        <label class="modal-label">Idea / Task Name</label>
+        <input type="text" id="backlogTitle" placeholder="e.g., Read new quant paper">
+        <label class="modal-label">Quick Notes</label>
+        <textarea id="backlogNotes" placeholder="Initial thoughts..."></textarea>
+        <div class="dialog-buttons">
+            <button class="btn-cancel" onclick="document.getElementById('backlogModal').close()">Cancel</button>
+            <button class="btn-save" onclick="saveBacklogItem()">Save to Inbox</button>
+        </div>
+    </dialog>
+
+    <!-- Task Modals -->
+    <dialog id="taskModal">
+        <h3 id="taskModalTitle">Schedule Task</h3>
+        <label class="modal-label">Master Goal Link</label>
+        <select id="taskGoal"></select>
+        <label class="modal-label">Session Focus</label>
+        <input type="text" id="taskTitle" placeholder="e.g., Optimizing Execution Logic...">
+        <div class="time-inputs">
+            <div><label>Start Time</label><input type="time" id="taskStartTime" required></div>
+            <div><label>End Time</label><input type="time" id="taskEndTime" required></div>
+        </div>
+        <label class="modal-label">Sub-tasks (Optional)</label>
+        <div id="modalSubtasks"></div>
+        <button type="button" class="btn-add-sub" onclick="addSubtaskInput()">+ Add Step (or hit Enter on previous)</button>
+        <label class="modal-label">Notes</label>
+        <textarea id="taskNotes" placeholder="Context or objectives..."></textarea>
+        <div class="dialog-buttons">
+            <button class="btn-cancel" onclick="cancelTask()">Cancel</button>
+            <button class="btn-save" onclick="saveTask()">Commit</button>
+        </div>
+    </dialog>
+
+    <dialog id="roadmapModal">
+        <h3>Strategic Roadmap</h3>
+        <label class="modal-label">Select Master Goal</label>
+        <select id="roadmapGoalSelect" onchange="renderRoadmap()"></select>
+        <div class="roadmap-progress"><div class="roadmap-progress-bar" id="roadmapProgressBar" style="width: 0%"></div></div>
+        <div id="milestonesList" style="max-height: 250px; overflow-y: auto; margin-bottom: 15px; padding-right: 5px;"></div>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+            <input type="text" id="newMilestoneInput" placeholder="e.g., Deploy to Paper Trading..." style="margin: 0; flex: 1;">
+            <button class="btn-primary" onclick="addMilestone()">Add</button>
+        </div>
+        <div class="dialog-buttons"><button class="btn-cancel" onclick="document.getElementById('roadmapModal').close()">Close</button></div>
+    </dialog>
+
+    <dialog id="journalModal">
+        <div class="view-toggles" style="margin-bottom: 15px;">
+            <button id="btnTabDaily" class="view-btn active" onclick="switchJournalTab('daily')">Daily Routine</button>
+            <button id="btnTabMaster" class="view-btn" onclick="switchJournalTab('master')">Master Journey</button>
+        </div>
+        <h3 id="journalModalTitle" style="border:none; padding:0; margin-bottom: 5px;">Daily Routine & Status</h3>
+        <textarea id="journalText" placeholder="Start writing here..."></textarea>
+        <div class="dialog-buttons">
+            <button class="btn-cancel" onclick="document.getElementById('journalModal').close()">Close</button>
+            <button class="btn-save" onclick="saveJournal()">Save Journal</button>
+        </div>
+    </dialog>
+
+    <dialog id="reviewModal">
+        <h3>Daily Retrospective</h3>
+        <p style="font-size: 0.9em; color: #666; margin-top: 0;">Record mistakes or adjustments for tomorrow.</p>
+        <textarea id="reviewText" placeholder="e.g., Code architecture failed at edge case..."></textarea>
+        <div class="dialog-buttons">
+            <button class="btn-cancel" onclick="document.getElementById('reviewModal').close()">Cancel</button>
+            <button class="btn-save" onclick="saveReview()">Save Review</button>
+        </div>
+    </dialog>
+
+    <!-- Upgraded Advanced Archives Modal -->
+    <dialog id="insightsModal">
+        <div class="insights-header"><h3>Quantitative Performance Archives (Last 30 Days)</h3></div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-val" id="statPlanned">0h</div><div class="stat-label">Hours Planned</div></div>
+            <div class="stat-card"><div class="stat-val" id="statCompleted">0h</div><div class="stat-label">Hours Executed</div></div>
+            <div class="stat-card"><div class="stat-val" id="statRate">0%</div><div class="stat-label">Discipline Rate</div></div>
+            <div class="stat-card"><div class="stat-val" id="statStreak">0</div><div class="stat-label">Active Days Logged</div></div>
+        </div>
+
+        <div class="archive-section-title">Master Goal Time Allocation</div>
+        <div class="goal-breakdown-list" id="goalBreakdownList"></div>
+
+        <div class="heatmap-container">
+            <h4>Effort Intensity Matrix (30-Day Rolling Window)</h4>
+            <div class="heatmap-grid" id="heatmapGrid"></div>
+        </div>
+
+        <div class="export-section">
+            <button class="btn-export" onclick="exportData('csv')">Download Raw CSV</button>
+            <button class="btn-export" onclick="exportData('json')">Download Full Backup JSON</button>
+            <button class="btn-export" style="background: var(--primary-color); color: #fff;" onclick="exportPerformanceReport()">📋 Copy Summary Report</button>
+        </div>
+        <div class="dialog-buttons"><button class="btn-cancel" onclick="document.getElementById('insightsModal').close()">Close Archives</button></div>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // ====================================================================
+        // CORE SETUP
+        // ====================================================================
+        const canvas = document.getElementById('clockCanvas');
+        const ctx = canvas.getContext('2d');
+        const slotsList = document.getElementById('slotsList');
+        const taskModal = document.getElementById('taskModal');
+        const reviewModal = document.getElementById('reviewModal');
+        const journalModal = document.getElementById('journalModal');
+        const roadmapModal = document.getElementById('roadmapModal');
+        const aiModal = document.getElementById('aiModal');
+        const backlogModal = document.getElementById('backlogModal');
+        const insightsModal = document.getElementById('insightsModal');
+        const goalColorModal = document.getElementById('goalColorModal');
+
+        const dpr = window.devicePixelRatio || 1;
+        const logicalSize = 500;
+        canvas.width = logicalSize * dpr; canvas.height = logicalSize * dpr;
+        canvas.style.width = `${logicalSize}px`; canvas.style.height = `${logicalSize}px`;
+        ctx.scale(dpr, dpr);
+        const centerX = logicalSize / 2, centerY = logicalSize / 2, radius = 210;
+
+        let isDragging = false, startAngle = null, currentAngle = null, activeColor = '#4a6984';
+        let editingTaskId = null, activeReviewId = null, sortMode = 'time', currentJournalTab = 'daily';
+        let schedulingFromBacklogId = null;
+
+        // ====================================================================
+        // SMALL UTILITIES: safe storage, ids, escaping, toasts
+        // ====================================================================
+        function makeSafeStorage() {
+            try {
+                const testKey = '__scheduler_test__';
+                window.localStorage.setItem(testKey, '1');
+                window.localStorage.removeItem(testKey);
+                return window.localStorage;
+            } catch (e) {
+                console.warn('Browser storage is unavailable here — using an in-memory fallback. Connect Cloud Sync for real persistence, or open this file directly in a browser tab for local storage to work.');
+                const mem = {};
+                return {
+                    getItem: k => (k in mem ? mem[k] : null),
+                    setItem: (k, v) => { mem[k] = String(v); },
+                    removeItem: k => { delete mem[k]; }
+                };
+            }
+        }
+        const storageAdapter = makeSafeStorage();
+
+        function genId() { return 'id_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function showToast(message, type) {
+            type = type || 'info';
+            const container = document.getElementById('toastContainer');
+            const div = document.createElement('div');
+            div.className = 'toast toast-' + type;
+            div.textContent = message;
+            container.appendChild(div);
+            requestAnimationFrame(() => div.classList.add('toast-show'));
+            setTimeout(() => {
+                div.classList.remove('toast-show');
+                setTimeout(() => div.remove(), 300);
+            }, 3800);
+        }
+
+        function timeAgo(date) {
+            const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+            if (secs < 10) return 'just now';
+            if (secs < 60) return secs + 's ago';
+            const mins = Math.floor(secs / 60);
+            if (mins < 60) return mins + 'm ago';
+            const hrs = Math.floor(mins / 60);
+            return hrs + 'h ago';
+        }
+
+        // ====================================================================
+        // DATA STORAGE (local cache — always kept up to date as a fallback)
+        // ====================================================================
+        let tasksByDate = {};
+        try { tasksByDate = JSON.parse(storageAdapter.getItem('classicSchedulerData')) || {}; } catch (e) { tasksByDate = {}; }
+
+        let customGoals = [];
+        try { customGoals = JSON.parse(storageAdapter.getItem('classicMasterGoals')) || ['Algorithmic Trading System', 'Quantitative Research']; } catch (e) { customGoals = ['Algorithmic Trading System', 'Quantitative Research']; }
+
+        let goalColors = {};
+        try { goalColors = JSON.parse(storageAdapter.getItem('classicGoalColors')) || {}; } catch (e) { goalColors = {}; }
+
+        let journalsByDate = {};
+        try { journalsByDate = JSON.parse(storageAdapter.getItem('classicJournals')) || {}; } catch (e) { journalsByDate = {}; }
+
+        let masterJournalText = storageAdapter.getItem('classicMasterJournal') || '';
+
+        let milestonesData = {};
+        try { milestonesData = JSON.parse(storageAdapter.getItem('classicMilestones')) || {}; } catch (e) { milestonesData = {}; }
+
+        let backlogData = [];
+        try { backlogData = JSON.parse(storageAdapter.getItem('classicBacklog')) || []; } catch (e) { backlogData = []; }
+
+        let selectedDateStr = "";
+        let scheduledSlots = [];
+        let aiChatHistory = [];
+
+        // ====================================================================
+        // CLOUD SYNC STATE
+        // ====================================================================
+        let supabaseConfig = null;
+        try { supabaseConfig = JSON.parse(storageAdapter.getItem('supabaseConfig')) || null; } catch (e) { supabaseConfig = null; }
+        let sb = null;
+        let cloudSession = null;
+        let cloudReady = false;
+        let cloudBusy = false;
+        let realtimeChannel = null;
+        let lastSyncedAt = null;
+        let isOnline = navigator.onLine;
+        let authTab = 'signin';
+
+        // --- Helper: goal-ink color resolution ---
+        function getTaskColor(slot) {
+            if (slot.goal && slot.goal !== 'Uncategorized' && goalColors[slot.goal]) {
+                return goalColors[slot.goal];
+            }
+            return slot.color || '#4a6984'; // Fallback to the originally chosen manual ink or default
+        }
+
+        // --- Date Standardizer ---
+        function getLocalTodayStr() {
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function initApp() {
+            renderGoalDropdown();
+            setDate(getLocalTodayStr());
+            setInterval(updateDigitalClock, 1000); updateDigitalClock();
+
+            document.getElementById('newMilestoneInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addMilestone(); }});
+            document.getElementById('aiUserInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); sendAIMessage(); }});
+
+            updateSyncBadge();
+            bootstrapCloudSession();
+
+            window.addEventListener('online', () => { isOnline = true; if (cloudReady) manualSyncNow(); });
+            window.addEventListener('offline', () => { isOnline = false; updateSyncBadge('error'); showToast('You are offline. Changes are saved locally and will sync once you are back online.', 'warn'); });
+
+            // Belt-and-suspenders background sync, in case Realtime isn't enabled on the project.
+            setInterval(async () => {
+                if (!cloudReady || !isOnline || cloudBusy) return;
+                try {
+                    await pullTasksForDate(selectedDateStr);
+                    scheduledSlots = tasksByDate[selectedDateStr] || [];
+                    updateScheduleUI(); drawClock();
+                    lastSyncedAt = new Date(); updateSyncBadge('synced');
+                } catch (e) { console.warn('Background sync failed', e); updateSyncBadge('error'); }
+            }, 45000);
+
+            setInterval(() => { if (cloudReady) updateSyncBadge('synced'); }, 15000);
+        }
+
+        async function bootstrapCloudSession() {
+            if (!supabaseConfig) return;
+            const ok = initSupabaseClient();
+            if (!ok) return;
+            try {
+                const { data, error } = await sb.auth.getSession();
+                if (error) throw error;
+                cloudSession = data.session || null;
+                if (cloudSession) { await onCloudSignedIn(); }
+                else { updateSyncBadge(); }
+                sb.auth.onAuthStateChange((event) => {
+                    if (event === 'SIGNED_OUT') { cloudSession = null; cloudReady = false; updateSyncBadge(); }
+                });
+            } catch (e) {
+                console.warn(e); updateSyncBadge('error');
+            }
+        }
+
+        // ====================================================================
+        // CLOUD SYNC — client setup, auth, modal rendering
+        // ====================================================================
+        function initSupabaseClient() {
+            if (!supabaseConfig || !supabaseConfig.url || !supabaseConfig.anonKey) return false;
+            if (typeof window.supabase === 'undefined') { console.warn('Supabase library has not loaded yet.'); return false; }
+            try {
+                sb = window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+                    auth: { persistSession: true, autoRefreshToken: true, storage: storageAdapter }
+                });
+                return true;
+            } catch (e) { console.error(e); return false; }
+        }
+
+        function updateSyncBadge(state) {
+            const badge = document.getElementById('syncBadge');
+            const text = document.getElementById('syncBadgeText');
+            if (!badge || !text) return;
+            badge.classList.remove('sync-local', 'sync-syncing', 'sync-synced', 'sync-error');
+            if (!supabaseConfig) { badge.classList.add('sync-local'); text.innerText = 'Local Only'; return; }
+            if (!cloudSession) { badge.classList.add('sync-local'); text.innerText = 'Not Signed In'; return; }
+            if (state === 'syncing') { badge.classList.add('sync-syncing'); text.innerText = 'Syncing…'; return; }
+            if (state === 'error') { badge.classList.add('sync-error'); text.innerText = 'Sync Error'; return; }
+            badge.classList.add('sync-synced');
+            text.innerText = lastSyncedAt ? ('Synced ' + timeAgo(lastSyncedAt)) : 'Synced';
+        }
+
+        function openCloudModal() {
+            if (supabaseConfig && !sb) initSupabaseClient();
+            renderCloudModal();
+            document.getElementById('cloudModal').showModal();
+        }
+
+        function setCloudBusy(v) { cloudBusy = v; renderCloudModal(); }
+
+        function countUnsynced() {
+            let n = 0;
+            Object.values(tasksByDate).forEach(list => list.forEach(t => { if (t._unsynced) n++; }));
+            return n;
+        }
+
+        function localMigrationDone() {
+            if (!cloudSession) return true;
+            return storageAdapter.getItem('migrated_' + cloudSession.user.id) === '1';
+        }
+
+        function setAuthTab(tab) { authTab = tab; renderCloudModal(); }
+
+        function renderCloudModal() {
+            const body = document.getElementById('cloudModalBody');
+            if (!body) return;
+
+            if (!supabaseConfig) {
+                body.innerHTML = `
+                    <p class="cloud-intro">Connect your own free Supabase project so your schedule, goals, ink colors, journal, and roadmap sync across every device instead of living only in this browser. See SETUP_GUIDE.md for step-by-step instructions.</p>
+                    <label class="modal-label">Supabase Project URL</label>
+                    <input type="text" id="cfgUrl" placeholder="https://xxxxxxxx.supabase.co">
+                    <label class="modal-label">Supabase anon public key</label>
+                    <input type="text" id="cfgKey" placeholder="eyJhbGciOi...">
+                    <div class="dialog-buttons" style="justify-content:flex-start; border-top:none; padding-top:5px;">
+                        <button class="btn-save" onclick="handleConnectClick()" ${cloudBusy ? 'disabled' : ''}>${cloudBusy ? 'Connecting…' : 'Connect'}</button>
+                    </div>`;
+                return;
+            }
+
+            if (!cloudSession) {
+                body.innerHTML = `
+                    <div class="cloud-status-line"><span>Project: ${escapeHtml(supabaseConfig.url)}</span><button class="small-link" onclick="forgetSupabaseConfig()">Use a different project</button></div>
+                    <div class="auth-tabs">
+                        <button class="auth-tab ${authTab === 'signin' ? 'active' : ''}" onclick="setAuthTab('signin')">Sign In</button>
+                        <button class="auth-tab ${authTab === 'signup' ? 'active' : ''}" onclick="setAuthTab('signup')">Create Account</button>
+                    </div>
+                    <label class="modal-label">Email</label>
+                    <input type="text" id="authEmail" placeholder="you@example.com">
+                    <label class="modal-label">Password</label>
+                    <input type="password" id="authPassword" placeholder="At least 6 characters">
+                    <div class="dialog-buttons" style="justify-content:space-between; border-top:none; padding-top:5px;">
+                        <button class="small-link" onclick="handleForgotPassword()">Forgot password?</button>
+                        <button class="btn-save" onclick="handleAuthSubmit()" ${cloudBusy ? 'disabled' : ''}>${cloudBusy ? (authTab === 'signin' ? 'Signing in…' : 'Creating…') : (authTab === 'signin' ? 'Sign In' : 'Create Account')}</button>
+                    </div>`;
+                return;
+            }
+
+            const unsyncedCount = countUnsynced();
+            body.innerHTML = `
+                <div class="cloud-status-line"><span>✅ Signed in as <strong>${escapeHtml(cloudSession.user.email || '')}</strong></span></div>
+                <p style="font-size:0.82em; color:#666;">Last synced: ${lastSyncedAt ? timeAgo(lastSyncedAt) : 'never yet'}. ${unsyncedCount > 0 ? unsyncedCount + ' item(s) waiting to sync.' : 'Everything is synced.'}</p>
+                <div class="dialog-buttons" style="justify-content:flex-start; flex-wrap:wrap; border-top:none; padding-top:5px;">
+                    <button class="btn-secondary" onclick="manualSyncNow()" ${cloudBusy ? 'disabled' : ''}>🔄 Sync Now</button>
+                    ${unsyncedCount > 0 ? `<button class="btn-secondary" onclick="retryUnsyncedTasksUI()" ${cloudBusy ? 'disabled' : ''}>↻ Retry ${unsyncedCount} unsynced</button>` : ''}
+                    ${!localMigrationDone() ? `<button class="btn-highlight" onclick="migrateLocalDataToCloud()" ${cloudBusy ? 'disabled' : ''}>⬆ Import local data to cloud</button>` : ''}
+                    <button class="btn-danger" style="padding:8px 14px; font-size:0.85em;" onclick="signOutCloud()">Sign Out</button>
+                </div>`;
+        }
+
+        async function handleConnectClick() {
+            const url = document.getElementById('cfgUrl').value.trim();
+            const key = document.getElementById('cfgKey').value.trim();
+            if (!url || !key) { showToast('Enter both the project URL and anon key.', 'warn'); return; }
+            setCloudBusy(true);
+            supabaseConfig = { url, anonKey: key };
+            const ok = initSupabaseClient();
+            if (!ok) { supabaseConfig = null; cloudBusy = false; renderCloudModal(); showToast('Could not create the Supabase client — double check the URL.', 'error'); return; }
+            storageAdapter.setItem('supabaseConfig', JSON.stringify(supabaseConfig));
+            try {
+                const { data, error } = await sb.auth.getSession();
+                if (error) throw error;
+                cloudSession = data.session || null;
+                if (cloudSession) await onCloudSignedIn();
+            } catch (e) {
+                console.error(e);
+                showToast('Connected, but could not verify session: ' + e.message, 'warn');
+            }
+            cloudBusy = false;
+            updateSyncBadge();
+            renderCloudModal();
+        }
+
+        function forgetSupabaseConfig() {
+            if (!confirm('Disconnect this Supabase project? Your data on the server is untouched — this only forgets the connection on this device.')) return;
+            if (realtimeChannel && sb) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+            supabaseConfig = null; sb = null; cloudSession = null; cloudReady = false;
+            storageAdapter.removeItem('supabaseConfig');
+            updateSyncBadge(); renderCloudModal();
+        }
+
+        async function handleAuthSubmit() {
+            const email = document.getElementById('authEmail').value.trim();
+            const password = document.getElementById('authPassword').value;
+            if (!email || !password) { showToast('Enter email and password.', 'warn'); return; }
+            setCloudBusy(true);
+            try {
+                if (authTab === 'signin') {
+                    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+                    if (error) throw error;
+                    cloudSession = data.session;
+                    await onCloudSignedIn();
+                    showToast('Signed in. Syncing your data…', 'success');
+                } else {
+                    const { data, error } = await sb.auth.signUp({ email, password });
+                    if (error) throw error;
+                    if (data.session) {
+                        cloudSession = data.session;
+                        await onCloudSignedIn();
+                        showToast('Account created and signed in.', 'success');
+                    } else {
+                        showToast('Check your email to confirm your account, then sign in.', 'info');
+                        authTab = 'signin';
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+                showToast((authTab === 'signin' ? 'Sign in failed: ' : 'Sign up failed: ') + e.message, 'error');
+            }
+            cloudBusy = false;
+            updateSyncBadge();
+            renderCloudModal();
+        }
+
+        async function handleForgotPassword() {
+            const email = document.getElementById('authEmail').value.trim();
+            if (!email) { showToast('Enter your email above first.', 'warn'); return; }
+            try {
+                const { error } = await sb.auth.resetPasswordForEmail(email);
+                if (error) throw error;
+                showToast('Password reset email sent.', 'info');
+            } catch (e) { showToast('Could not send reset email: ' + e.message, 'error'); }
+        }
+
+        async function signOutCloud() {
+            try { if (sb) await sb.auth.signOut(); } catch (e) { console.error(e); }
+            if (realtimeChannel && sb) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+            cloudSession = null; cloudReady = false;
+            updateSyncBadge(); renderCloudModal();
+            showToast('Signed out. Working in Local Only mode on this device.', 'info');
+        }
+
+        async function onCloudSignedIn() {
+            cloudReady = true;
+            updateSyncBadge('syncing');
+            try {
+                await pullGlobalCloudData();
+                await pullTasksForDate(selectedDateStr);
+                scheduledSlots = tasksByDate[selectedDateStr] || [];
+                subscribeRealtime();
+                lastSyncedAt = new Date();
+                updateSyncBadge('synced');
+            } catch (e) {
+                console.error(e);
+                updateSyncBadge('error');
+                showToast('Cloud sync error: ' + e.message, 'error');
+            }
+            renderGoalDropdown();
+            updateScheduleUI(); drawClock(); renderBacklog();
+        }
+
+        async function manualSyncNow() {
+            if (!cloudReady) return;
+            setCloudBusy(true);
+            updateSyncBadge('syncing');
+            try {
+                await pullGlobalCloudData();
+                await pullTasksForDate(selectedDateStr);
+                scheduledSlots = tasksByDate[selectedDateStr] || [];
+                await retryUnsyncedTasks();
+                renderGoalDropdown(); updateScheduleUI(); drawClock(); renderBacklog();
+                lastSyncedAt = new Date(); updateSyncBadge('synced');
+                showToast('Synced.', 'success');
+            } catch (e) { updateSyncBadge('error'); showToast('Sync failed: ' + e.message, 'error'); }
+            cloudBusy = false;
+            renderCloudModal();
+        }
+
+        async function retryUnsyncedTasksUI() { await retryUnsyncedTasks(); renderCloudModal(); showToast('Retry complete.', 'info'); }
+
+        // ---- Cloud <-> local row mapping ----
+        function rowToTask(row) {
+            return {
+                id: String(row.id),
+                startAngle: timeStrToAngle(row.start_time),
+                endAngle: timeStrToAngle(row.end_time),
+                color: row.color || '#4a6984',
+                label: row.label,
+                goal: row.goal || 'Uncategorized',
+                notes: row.notes || '',
+                review: row.review || null,
+                completed: !!row.completed,
+                subtasks: Array.isArray(row.subtasks) ? row.subtasks : []
+            };
+        }
+        function taskToRow(task, dateStr) {
+            return {
+                date: dateStr,
+                label: task.label,
+                goal: task.goal,
+                start_time: angleToTimeStr(task.startAngle),
+                end_time: angleToTimeStr(task.endAngle),
+                color: task.color,
+                notes: task.notes || '',
+                completed: !!task.completed,
+                subtasks: task.subtasks || [],
+                review: task.review || null
+            };
+        }
+
+        async function pullGlobalCloudData() {
+            const [goalsRes, msRes, blRes, mjRes, usRes] = await Promise.all([
+                sb.from('goals').select('*').order('created_at'),
+                sb.from('milestones').select('*').order('sort_order'),
+                sb.from('backlog_items').select('*').order('created_at'),
+                sb.from('master_journal').select('*').maybeSingle(),
+                sb.from('user_settings').select('*').maybeSingle()
+            ]);
+            if (goalsRes.error) throw goalsRes.error;
+            if (msRes.error) throw msRes.error;
+            if (blRes.error) throw blRes.error;
+            if (mjRes.error) throw mjRes.error;
+            if (usRes.error) throw usRes.error;
+
+            if (goalsRes.data && goalsRes.data.length > 0) {
+                customGoals = goalsRes.data.map(g => g.name);
+                goalColors = {};
+                goalsRes.data.forEach(g => { if (g.color) goalColors[g.name] = g.color; });
+            } else if (customGoals.length > 0) {
+                for (const g of customGoals) {
+                    try { await sb.from('goals').insert({ name: g, color: goalColors[g] || '#4a6984' }); } catch (e) { /* likely already exists */ }
+                }
+            }
+            storageAdapter.setItem('classicMasterGoals', JSON.stringify(customGoals));
+            storageAdapter.setItem('classicGoalColors', JSON.stringify(goalColors));
+
+            milestonesData = {};
+            (msRes.data || []).forEach(r => {
+                if (!milestonesData[r.goal]) milestonesData[r.goal] = [];
+                milestonesData[r.goal].push({ id: String(r.id), text: r.text, done: r.done });
+            });
+            storageAdapter.setItem('classicMilestones', JSON.stringify(milestonesData));
+
+            backlogData = (blRes.data || []).map(r => ({ id: String(r.id), label: r.label, goal: r.goal || 'Uncategorized', notes: r.notes || '' }));
+            storageAdapter.setItem('classicBacklog', JSON.stringify(backlogData));
+
+            if (mjRes.data && typeof mjRes.data.content === 'string') {
+                masterJournalText = mjRes.data.content;
+                storageAdapter.setItem('classicMasterJournal', masterJournalText);
+            }
+
+            if (usRes.data) {
+                if (usRes.data.gemini_api_key) storageAdapter.setItem('geminiApiKey', usRes.data.gemini_api_key);
+                if (usRes.data.gemini_model) storageAdapter.setItem('geminiModel', usRes.data.gemini_model);
+            }
+        }
+
+        async function pullTasksForDate(dateStr) {
+            if (!cloudReady) return;
+            const { data, error } = await sb.from('tasks').select('*').eq('date', dateStr);
+            if (error) throw error;
+            const unsynced = (tasksByDate[dateStr] || []).filter(t => t._unsynced);
+            tasksByDate[dateStr] = (data || []).map(rowToTask).concat(unsynced);
+            storageAdapter.setItem('classicSchedulerData', JSON.stringify(tasksByDate));
+        }
+
+        async function pullTaskRangeForArchives(startStr, endStr) {
+            if (!cloudReady) return;
+            const { data, error } = await sb.from('tasks').select('*').gte('date', startStr).lte('date', endStr);
+            if (error) throw error;
+            const byDate = {};
+            (data || []).forEach(row => { if (!byDate[row.date]) byDate[row.date] = []; byDate[row.date].push(rowToTask(row)); });
+            Object.keys(byDate).forEach(d => { tasksByDate[d] = byDate[d]; });
+            storageAdapter.setItem('classicSchedulerData', JSON.stringify(tasksByDate));
+        }
+
+        // Full-history pull so the Drill Sergeant AI's "omniscient ledger" (all dates) is
+        // actually complete when Cloud Sync is on, not just whatever dates happen to be cached
+        // locally. Throttled so re-opening the AI modal repeatedly doesn't hammer the DB.
+        async function pullAllTasksForAI() {
+            if (!cloudReady) return;
+            const now = Date.now();
+            if (pullAllTasksForAI._lastPull && now - pullAllTasksForAI._lastPull < 60000) return;
+            try {
+                const { data, error } = await sb.from('tasks').select('*');
+                if (error) throw error;
+                const byDate = {};
+                (data || []).forEach(row => { if (!byDate[row.date]) byDate[row.date] = []; byDate[row.date].push(rowToTask(row)); });
+                // Preserve any locally unsynced tasks that haven't made it to the cloud yet.
+                Object.keys(tasksByDate).forEach(d => {
+                    const unsynced = (tasksByDate[d] || []).filter(t => t._unsynced);
+                    if (unsynced.length > 0) byDate[d] = (byDate[d] || []).concat(unsynced);
+                });
+                tasksByDate = byDate;
+                storageAdapter.setItem('classicSchedulerData', JSON.stringify(tasksByDate));
+                scheduledSlots = tasksByDate[selectedDateStr] || [];
+                pullAllTasksForAI._lastPull = now;
+            } catch (e) { console.warn('Could not pull full ledger for AI context', e); }
+        }
+
+        function subscribeRealtime() {
+            if (!sb || !cloudSession) return;
+            try {
+                const uid = cloudSession.user.id;
+                if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+                realtimeChannel = sb.channel('sync-' + uid)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: 'user_id=eq.' + uid }, handleRemoteTaskChange)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: 'user_id=eq.' + uid }, handleRemoteGoalChange)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'milestones', filter: 'user_id=eq.' + uid }, handleRemoteMilestoneChange)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'backlog_items', filter: 'user_id=eq.' + uid }, handleRemoteBacklogChange)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_journals', filter: 'user_id=eq.' + uid }, handleRemoteDailyJournalChange)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'master_journal', filter: 'user_id=eq.' + uid }, handleRemoteMasterJournalChange)
+                    .subscribe();
+            } catch (e) { console.warn('Realtime subscription failed — relying on periodic sync instead.', e); }
+        }
+
+        function handleRemoteTaskChange(payload) {
+            const row = (payload.new && Object.keys(payload.new).length) ? payload.new : payload.old;
+            if (!row || !row.date) return;
+            if (payload.eventType === 'DELETE') {
+                tasksByDate[row.date] = (tasksByDate[row.date] || []).filter(t => t.id !== String(row.id));
+            } else {
+                const task = rowToTask(payload.new);
+                const list = tasksByDate[row.date] || (tasksByDate[row.date] = []);
+                const idx = list.findIndex(t => t.id === task.id);
+                if (idx > -1) list[idx] = task; else list.push(task);
+            }
+            storageAdapter.setItem('classicSchedulerData', JSON.stringify(tasksByDate));
+            if (row.date === selectedDateStr) {
+                scheduledSlots = tasksByDate[selectedDateStr] || [];
+                updateScheduleUI(); drawClock();
+            }
+            lastSyncedAt = new Date(); updateSyncBadge('synced');
+        }
+
+        function handleRemoteGoalChange(payload) {
+            if (payload.eventType === 'DELETE') {
+                const name = payload.old.name;
+                customGoals = customGoals.filter(g => g !== name);
+                delete goalColors[name];
+            } else {
+                const name = payload.new.name;
+                if (!customGoals.includes(name)) customGoals.push(name);
+                if (payload.new.color) goalColors[name] = payload.new.color;
+            }
+            storageAdapter.setItem('classicMasterGoals', JSON.stringify(customGoals));
+            storageAdapter.setItem('classicGoalColors', JSON.stringify(goalColors));
+            renderGoalDropdown();
+            updateScheduleUI(); drawClock();
+            if (goalColorModal.open) openGoalColorModal();
+        }
+
+        function handleRemoteMilestoneChange(payload) {
+            const row = (payload.new && Object.keys(payload.new).length) ? payload.new : payload.old;
+            if (!row) return;
+            const goal = row.goal;
+            if (!milestonesData[goal]) milestonesData[goal] = [];
+            if (payload.eventType === 'DELETE') {
+                milestonesData[goal] = milestonesData[goal].filter(m => m.id !== String(row.id));
+            } else {
+                const m = { id: String(payload.new.id), text: payload.new.text, done: payload.new.done };
+                const idx = milestonesData[goal].findIndex(x => x.id === m.id);
+                if (idx > -1) milestonesData[goal][idx] = m; else milestonesData[goal].push(m);
+            }
+            storageAdapter.setItem('classicMilestones', JSON.stringify(milestonesData));
+            if (roadmapModal.open) renderRoadmap();
+        }
+
+        function handleRemoteBacklogChange(payload) {
+            if (payload.eventType === 'DELETE') {
+                backlogData = backlogData.filter(b => b.id !== String(payload.old.id));
+            } else {
+                const b = { id: String(payload.new.id), label: payload.new.label, goal: payload.new.goal || 'Uncategorized', notes: payload.new.notes || '' };
+                const idx = backlogData.findIndex(x => x.id === b.id);
+                if (idx > -1) backlogData[idx] = b; else backlogData.push(b);
+            }
+            storageAdapter.setItem('classicBacklog', JSON.stringify(backlogData));
+            if (document.getElementById('backlogDrawer').classList.contains('open')) renderBacklog();
+        }
+
+        function handleRemoteDailyJournalChange(payload) {
+            const row = (payload.new && Object.keys(payload.new).length) ? payload.new : payload.old;
+            if (!row) return;
+            if (payload.eventType === 'DELETE') delete journalsByDate[row.date];
+            else journalsByDate[row.date] = payload.new.content || '';
+            storageAdapter.setItem('classicJournals', JSON.stringify(journalsByDate));
+            if (journalModal.open && currentJournalTab === 'daily' && row.date === selectedDateStr) {
+                document.getElementById('journalText').value = journalsByDate[selectedDateStr] || '';
+            }
+        }
+
+        function handleRemoteMasterJournalChange(payload) {
+            masterJournalText = (payload.eventType === 'DELETE') ? '' : (payload.new.content || '');
+            storageAdapter.setItem('classicMasterJournal', masterJournalText);
+            if (journalModal.open && currentJournalTab === 'master') {
+                document.getElementById('journalText').value = masterJournalText;
+            }
+        }
+
+        async function retryUnsyncedTasks() {
+            if (!cloudReady) return;
+            for (const [dateStr, list] of Object.entries(tasksByDate)) {
+                for (const t of list) {
+                    if (t._unsynced) {
+                        try {
+                            const { data, error } = await sb.from('tasks').insert(taskToRow(t, dateStr)).select().single();
+                            if (error) throw error;
+                            t.id = String(data.id);
+                            delete t._unsynced;
+                        } catch (e) { console.warn('Retry failed for a task', e); }
+                    }
+                }
+            }
+            storageAdapter.setItem('classicSchedulerData', JSON.stringify(tasksByDate));
+            if (selectedDateStr) { scheduledSlots = tasksByDate[selectedDateStr] || []; updateScheduleUI(); }
+        }
+
+        async function migrateLocalDataToCloud() {
+            if (!cloudReady) return;
+            setCloudBusy(true);
+            let count = 0;
+            try {
+                for (const g of customGoals) {
+                    try { await sb.from('goals').insert({ name: g, color: goalColors[g] || '#4a6984' }); } catch (e) { /* likely already exists */ }
+                }
+                for (const [dateStr, list] of Object.entries(tasksByDate)) {
+                    for (const t of list) {
+                        try {
+                            const { data, error } = await sb.from('tasks').insert(taskToRow(t, dateStr)).select().single();
+                            if (!error && data) { t.id = String(data.id); delete t._unsynced; }
+                            count++;
+                        } catch (e) { console.warn(e); }
+                    }
+                }
+                for (const [goal, list] of Object.entries(milestonesData)) {
+                    for (const m of list) {
+                        try {
+                            const { data, error } = await sb.from('milestones').insert({ goal, text: m.text, done: m.done }).select().single();
+                            if (!error && data) m.id = String(data.id);
+                            count++;
+                        } catch (e) { /* ignore */ }
+                    }
+                }
+                for (const b of backlogData) {
+                    try {
+                        const { data, error } = await sb.from('backlog_items').insert({ label: b.label, goal: b.goal, notes: b.notes }).select().single();
+                        if (!error && data) b.id = String(data.id);
+                        count++;
+                    } catch (e) { /* ignore */ }
+                }
+                for (const [dateStr, text] of Object.entries(journalsByDate)) {
+                    try { await sb.from('daily_journals').upsert({ date: dateStr, content: text }, { onConflict: 'user_id,date' }); count++; } catch (e) { /* ignore */ }
+                }
+                if (masterJournalText && masterJournalText.trim() !== '') {
+                    try { await sb.from('master_journal').upsert({ content: masterJournalText }, { onConflict: 'user_id' }); count++; } catch (e) { /* ignore */ }
+                }
+                storageAdapter.setItem('migrated_' + cloudSession.user.id, '1');
+                storageAdapter.setItem('classicSchedulerData', JSON.stringify(tasksByDate));
+                storageAdapter.setItem('classicMilestones', JSON.stringify(milestonesData));
+                storageAdapter.setItem('classicBacklog', JSON.stringify(backlogData));
+                showToast('Imported ' + count + ' item(s) to the cloud.', 'success');
+            } catch (e) {
+                console.error(e);
+                showToast('Import ran into an error partway through: ' + e.message, 'error');
+            }
+            cloudBusy = false;
+            updateScheduleUI(); renderBacklog(); renderCloudModal();
+        }
+
+        // ====================================================================
+        // DRILL SERGEANT AI LOGIC (Cross-Temporal Omni-Command)
+        // ====================================================================
+        function openAIModal() {
+            aiModal.showModal();
+            setTimeout(() => document.getElementById('aiUserInput').focus(), 100);
+            if (cloudReady) { pullAllTasksForAI().then(() => { updateScheduleUI(); drawClock(); }).catch(() => {}); }
+        }
+
+        function clearAIHistory() {
+            if (confirm("Wipe memory and start fresh with the Commander?")) {
+                aiChatHistory = [];
+                document.getElementById('aiChatBox').innerHTML = '<div class="chat-msg msg-ai">MEMORY WIPED. ATTENTION! I am your commanding officer. Hand over your ledger, stop making excuses, and let\'s get your execution dialed in. What are we optimizing today?</div>';
+            }
+        }
+
+        function openAISettingsModal() {
+            const key = storageAdapter.getItem('geminiApiKey') || '';
+            const model = storageAdapter.getItem('geminiModel') || 'gemini-3.6-flash';
+            document.getElementById('settingsApiKey').value = key;
+            const select = document.getElementById('settingsModel');
+            const knownValues = Array.from(select.options).map(o => o.value);
+            if (knownValues.includes(model)) {
+                select.value = model;
+                document.getElementById('settingsModelCustom').style.display = 'none';
+            } else {
+                select.value = '__custom__';
+                document.getElementById('settingsModelCustom').style.display = 'block';
+                document.getElementById('settingsModelCustom').value = model;
+            }
+            document.getElementById('aiSettingsModal').showModal();
+        }
+
+        document.getElementById('settingsModel').addEventListener('change', function() {
+            document.getElementById('settingsModelCustom').style.display = this.value === '__custom__' ? 'block' : 'none';
+        });
+
+        async function saveAISettings() {
+            const key = document.getElementById('settingsApiKey').value.trim();
+            let model = document.getElementById('settingsModel').value;
+            if (model === '__custom__') model = document.getElementById('settingsModelCustom').value.trim() || 'gemini-3.6-flash';
+            storageAdapter.setItem('geminiApiKey', key);
+            storageAdapter.setItem('geminiModel', model);
+            document.getElementById('aiSettingsModal').close();
+            showToast('AI settings saved.', 'success');
+            if (cloudReady) {
+                try {
+                    const { error } = await sb.from('user_settings').upsert({ gemini_api_key: key, gemini_model: model }, { onConflict: 'user_id' });
+                    if (error) throw error;
+                } catch (e) { showToast('Saved locally, but cloud sync of settings failed: ' + e.message, 'warn'); }
+            }
+        }
+
+        function appendChatMessage(sender, text) {
+            const box = document.getElementById('aiChatBox');
+            const div = document.createElement('div');
+            div.className = `chat-msg ${sender === 'user' ? 'msg-user' : 'msg-ai'}`;
+            div.innerHTML = escapeHtml(text).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        async function sendAIMessage() {
+            const inputEl = document.getElementById('aiUserInput');
+            const text = inputEl.value.trim();
+            if (!text) return;
+
+            const apiKey = storageAdapter.getItem('geminiApiKey');
+            if (!apiKey) {
+                showToast("No Gemini API key set yet. Click '⚙ Settings' to add one.", 'warn');
+                return;
+            }
+            const model = storageAdapter.getItem('geminiModel') || 'gemini-3.6-flash';
+
+            appendChatMessage('user', text);
+            inputEl.value = '';
+            inputEl.disabled = true;
+            document.getElementById('aiSendBtn').disabled = true;
+
+            const todayStr = getLocalTodayStr();
+
+            // Build an omniscient summary of the entire active ledger so the AI knows the IDs
+            // of tasks on every date, not just the one currently being viewed.
+            let allTasksSummary = "";
+            const sortedDates = Object.keys(tasksByDate).sort();
+            sortedDates.forEach(dateKey => {
+                const tasksForDate = tasksByDate[dateKey];
+                if (tasksForDate && tasksForDate.length > 0) {
+                    allTasksSummary += `[DATE: ${dateKey}]\n`;
+                    [...tasksForDate].sort((a, b) => a.startAngle - b.startAngle).forEach(t => {
+                        allTasksSummary += `- ID: "${t.id}" | [${t.completed ? 'DONE' : 'PENDING'}] ${angleToTimeStr(t.startAngle)} to ${angleToTimeStr(t.endAngle)} | Task: ${t.label}\n`;
+                    });
+                }
+            });
+            if (!allTasksSummary) allTasksSummary = "The entire historical ledger is completely empty.";
+
+            const systemContext = `
+                You are a highly disciplined, no-nonsense military drill sergeant. Your job is to whip the user into shape and ensure absolute execution of their goals.
+                You do not accept excuses, laziness, or procrastination. You speak in a direct, commanding, and uncompromising tone. You demand excellence, focus, and maximum effort.
+                Analyze their schedule ruthlessly. Point out failures bluntly, give actionable orders, and make sure they operate with precision.
+
+                CURRENT CONTEXT:
+                Current App Viewing Date: ${selectedDateStr}
+                Actual Real-World Today: ${todayStr}
+                User's Master Goals: ${customGoals.join(', ')}.
+
+                OMNISCIENT LEDGER DATA (ALL DATES):
+                ${allTasksSummary}
+
+                --- CROSS-TEMPORAL COMMAND CAPABILITY ---
+                You have FULL CLEARANCE to modify the user's schedule for ANY date (past, present, or future).
+                If the user orders you to add or delete a task, you MUST comply by appending a strict JSON array at the absolute end of your response, wrapped exactly in ===COMMANDS_BEGIN=== and ===COMMANDS_END=== delimiters.
+
+                Format:
+                ===COMMANDS_BEGIN===
+                [
+                  { "action": "add", "date": "2026-08-05", "label": "Review Code", "start": "14:00", "end": "15:30", "goal": "Algorithmic Trading System" },
+                  { "action": "delete", "date": "2026-08-04", "id": "id_abc123" }
+                ]
+                ===COMMANDS_END===
+
+                Rules for commands:
+                1. ALWAYS include the "date" field in format "YYYY-MM-DD". If the user doesn't specify a date, default to the Current App Viewing Date (${selectedDateStr}).
+                2. Use strictly 24-hour time format ("HH:MM") for start and end times.
+                3. Match the "goal" to one of their existing Master Goals if possible, or use "Uncategorized".
+                4. To delete, you must provide both the exact "id" string (in quotes, exactly as shown — it is not necessarily numeric) and the "date" it belongs to.
+                5. If no schedule modifications are needed, DO NOT output the command block at all.
+            `;
+
+            const payload = {
+                system_instruction: { parts: [{ text: systemContext }] },
+                contents: [
+                    ...aiChatHistory,
+                    { role: "user", parts: [{ text: text }] }
+                ]
+            };
+
+            try {
+                appendChatMessage('ai', 'PROCESSING CROSS-TEMPORAL INTEL...');
+                const box = document.getElementById('aiChatBox');
+                const loadingNode = box.lastChild;
+
+                const endpointUrl = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(apiKey.trim());
+
+                const response = await fetch(endpointUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    let errMsg = `API Error ${response.status}`;
+                    try {
+                        const errData = await response.json();
+                        if (errData.error && errData.error.message) errMsg += `: ${errData.error.message}`;
+                    } catch (e) { /* ignore parse failure */ }
+                    throw new Error(errMsg);
+                }
+
+                const data = await response.json();
+                const candidate = data.candidates && data.candidates[0];
+                if (!candidate || !candidate.content || !candidate.content.parts) {
+                    throw new Error('No usable response from the model (it may have been blocked). Try rephrasing.');
+                }
+                let aiText = candidate.content.parts.map(p => p.text || '').join('');
+
+                const commandRegex = /===COMMANDS_BEGIN===([\s\S]*?)===COMMANDS_END===/;
+                const match = aiText.match(commandRegex);
+
+                if (match) {
+                    try {
+                        const rawJsonString = match[1].replace(/```json/gi, '').replace(/```/g, '').trim();
+                        const commands = JSON.parse(rawJsonString);
+
+                        for (const cmd of commands) {
+                            const targetDate = cmd.date || selectedDateStr;
+                            if (!tasksByDate[targetDate]) tasksByDate[targetDate] = [];
+
+                            if (cmd.action === 'add') {
+                                const nStart = timeStrToAngle(cmd.start);
+                                const nEnd = timeStrToAngle(cmd.end);
+                                const newTask = {
+                                    id: genId(), startAngle: nStart, endAngle: nEnd, color: '#a84646',
+                                    label: cmd.label || 'Untitled Task', goal: cmd.goal || 'Uncategorized',
+                                    notes: 'Assigned directly by Commander AI', review: null, completed: false, subtasks: [],
+                                    _unsynced: cloudReady
+                                };
+                                tasksByDate[targetDate].push(newTask);
+                                if (cloudReady) {
+                                    try {
+                                        const { data: rowData, error } = await sb.from('tasks').insert(taskToRow(newTask, targetDate)).select().single();
+                                        if (error) throw error;
+                                        newTask.id = String(rowData.id); delete newTask._unsynced;
+                                    } catch (e) { console.warn('AI-added task failed to sync', e); }
+                                }
+                            } else if (cmd.action === 'delete') {
+                                const targetId = String(cmd.id);
+                                const victim = (tasksByDate[targetDate] || []).find(t => t.id === targetId);
+                                tasksByDate[targetDate] = (tasksByDate[targetDate] || []).filter(t => t.id !== targetId);
+                                if (cloudReady && victim && !victim._unsynced) {
+                                    try { await sb.from('tasks').delete().eq('id', targetId); } catch (e) { console.warn('AI delete failed to sync', e); }
+                                }
+                            }
+                        }
+
+                        scheduledSlots = tasksByDate[selectedDateStr] || [];
+                        persistData();
+                        updateScheduleUI();
+                        drawClock();
+
+                        aiText = aiText.replace(commandRegex, '').trim();
+                        aiText += "\n\n**[SYSTEM: Cross-Temporal Ledger Updated Successfully]**";
+                    } catch (e) {
+                        console.error("Failed to parse AI commands", e);
+                        aiText += "\n\n*(System Error: Commander issued a malformed cross-temporal command)*";
+                    }
+                }
+
+                aiChatHistory.push({ role: "user", parts: [{ text: text }] });
+                aiChatHistory.push({ role: "model", parts: [{ text: aiText }] });
+
+                loadingNode.innerHTML = escapeHtml(aiText).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+                box.scrollTop = box.scrollHeight;
+
+            } catch (err) {
+                console.error(err);
+                const box = document.getElementById('aiChatBox');
+                box.lastChild.innerHTML = `<span style="color: #c00;"><strong>COMMUNICATION FAILURE:</strong> ${escapeHtml(err.message)}. Check your API key and model in ⚙ Settings.</span>`;
+            } finally {
+                inputEl.disabled = false;
+                document.getElementById('aiSendBtn').disabled = false;
+                inputEl.focus();
+            }
+        }
+
+        // ====================================================================
+        // Backlog / Inbox Logic
+        // ====================================================================
+        function toggleBacklog() {
+            const drawer = document.getElementById('backlogDrawer');
+            const overlay = document.getElementById('backlogOverlay');
+            if (drawer.classList.contains('open')) {
+                drawer.classList.remove('open'); overlay.classList.remove('active');
+            } else {
+                drawer.classList.add('open'); overlay.classList.add('active'); renderBacklog();
+            }
+        }
+
+        function renderBacklog() {
+            const list = document.getElementById('backlogList'); list.innerHTML = '';
+            if (backlogData.length === 0) { list.innerHTML = '<p style="color:#888; font-style:italic; text-align:center; margin-top:30px;">Your inbox is empty.<br>Great job capturing ideas.</p>'; return; }
+            backlogData.forEach(b => {
+                let badge = b.goal && b.goal !== 'Uncategorized' ? `<div class="slot-goal-badge" style="margin-bottom:8px;">${escapeHtml(b.goal)}</div>` : '';
+                list.innerHTML += `<div class="backlog-item"><div style="font-weight:bold; color:var(--primary-color); font-size:1.05em; margin-bottom:4px; word-break: break-word;">${escapeHtml(b.label)}</div>${badge}${b.notes ? `<p style="font-size:0.85em; color:#666; margin: 0 0 10px 0; font-style:italic; white-space:pre-wrap;">${escapeHtml(b.notes)}</p>` : ''}<div class="action-buttons" style="margin-left:0; margin-top:8px;"><button class="btn-action" style="border: 1px solid var(--brass-med); font-weight:bold; color:var(--brass-dark);" onclick="scheduleBacklogItem('${b.id}')">🗓 Schedule</button><button class="btn-action" onclick="deleteBacklogItem('${b.id}')">🗑 Delete</button></div></div>`;
+            });
+        }
+
+        function openBacklogModal() { document.getElementById('backlogGoal').innerHTML = document.getElementById('taskGoal').innerHTML; document.getElementById('backlogTitle').value = ''; document.getElementById('backlogNotes').value = ''; backlogModal.showModal(); }
+
+        async function saveBacklogItem() {
+            const label = document.getElementById('backlogTitle').value || 'Untitled Idea';
+            const goal = document.getElementById('backlogGoal').value;
+            const notes = document.getElementById('backlogNotes').value;
+            const item = { id: genId(), label, goal, notes };
+            backlogData.push(item);
+            storageAdapter.setItem('classicBacklog', JSON.stringify(backlogData));
+            backlogModal.close();
+            renderBacklog();
+            if (cloudReady) {
+                try {
+                    const { data, error } = await sb.from('backlog_items').insert({ label, goal, notes }).select().single();
+                    if (error) throw error;
+                    item.id = String(data.id);
+                    storageAdapter.setItem('classicBacklog', JSON.stringify(backlogData));
+                } catch (e) { showToast('Saved locally — cloud sync failed: ' + e.message, 'warn'); }
+            }
+        }
+
+        async function deleteBacklogItem(id) {
+            const victim = backlogData.find(b => b.id === id);
+            backlogData = backlogData.filter(b => b.id !== id);
+            storageAdapter.setItem('classicBacklog', JSON.stringify(backlogData));
+            renderBacklog();
+            if (cloudReady && victim) {
+                try { const { error } = await sb.from('backlog_items').delete().eq('id', id); if (error) throw error; }
+                catch (e) { showToast('Could not delete from cloud: ' + e.message, 'error'); }
+            }
+        }
+
+        function scheduleBacklogItem(id) {
+            const b = backlogData.find(x => x.id === id); if (!b) return;
+            schedulingFromBacklogId = id; toggleBacklog(); openManualTaskModal();
+            document.getElementById('taskModalTitle').innerText = "Schedule from Inbox";
+            document.getElementById('taskTitle').value = b.label; document.getElementById('taskGoal').value = b.goal; document.getElementById('taskNotes').value = b.notes || '';
+        }
+
+        // ====================================================================
+        // Standard App Logic
+        // ====================================================================
+        function updateDigitalClock() { document.getElementById('digitalClock').innerText = new Date().toLocaleTimeString(); drawClock(); }
+
+        function setDate(dateStr) {
+            if (!dateStr) return;
+            selectedDateStr = dateStr;
+            document.getElementById('datePicker').value = selectedDateStr;
+            const d = new Date(selectedDateStr + 'T12:00:00');
+            document.getElementById('displayDate').innerText = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+            scheduledSlots = tasksByDate[selectedDateStr] || [];
+            updateScheduleUI();
+            drawClock();
+            if (cloudReady) {
+                const requestedDate = selectedDateStr;
+                pullTasksForDate(requestedDate).then(() => {
+                    if (requestedDate === selectedDateStr) {
+                        scheduledSlots = tasksByDate[selectedDateStr] || [];
+                        updateScheduleUI();
+                        drawClock();
+                    }
+                }).catch(e => { console.warn(e); updateSyncBadge('error'); });
+            }
+        }
+
+        function changeDate(deltaDays) { const d = new Date(selectedDateStr + 'T12:00:00'); d.setDate(d.getDate() + deltaDays); setDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`); }
+        function persistData() { tasksByDate[selectedDateStr] = scheduledSlots; storageAdapter.setItem('classicSchedulerData', JSON.stringify(tasksByDate)); }
+
+        function renderGoalDropdown() {
+            const select = document.getElementById('taskGoal'); select.innerHTML = '';
+            customGoals.forEach(g => { const opt = document.createElement('option'); opt.value = g; opt.innerText = g; select.appendChild(opt); });
+            select.innerHTML += `<option value="Uncategorized">None / Uncategorized</option><option value="__NEW__">➕ Create New Goal...</option>`;
+        }
+        document.getElementById('taskGoal').addEventListener('change', function(e) {
+            if (this.value === '__NEW__') {
+                const newGoal = prompt("Enter new master goal name:");
+                if (newGoal && newGoal.trim() !== '') {
+                    const cleanGoal = newGoal.trim();
+                    if (!customGoals.includes(cleanGoal)) {
+                        customGoals.push(cleanGoal);
+                        storageAdapter.setItem('classicMasterGoals', JSON.stringify(customGoals));
+                        goalColors[cleanGoal] = activeColor;
+                        storageAdapter.setItem('classicGoalColors', JSON.stringify(goalColors));
+                        if (cloudReady) { sb.from('goals').insert({ name: cleanGoal, color: activeColor }).then(({ error }) => { if (error) console.warn(error); }); }
+                    }
+                    renderGoalDropdown();
+                    this.value = cleanGoal;
+                } else this.value = 'Uncategorized';
+            }
+        });
+
+        document.querySelectorAll('.color-swatch').forEach(swatch => { swatch.addEventListener('click', (e) => { document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active')); e.target.classList.add('active'); activeColor = e.target.getAttribute('data-color'); }); });
+
+        function getAngle(e) { const rect = canvas.getBoundingClientRect(); const scaleX = logicalSize / rect.width, scaleY = logicalSize / rect.height; const x = (e.clientX - rect.left) * scaleX - centerX, y = (e.clientY - rect.top) * scaleY - centerY; let angle = Math.atan2(y, x) + Math.PI / 2; if (angle < 0) angle += 2 * Math.PI; return angle; }
+        function angleToTimeStr(angle) { let totalHours = (angle / (2 * Math.PI)) * 24, hours = Math.floor(totalHours), minutes = Math.round((totalHours - hours) * 60); if (minutes === 60) { hours += 1; minutes = 0; } if (hours >= 24) hours -= 24; return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`; }
+        function timeStrToAngle(timeStr) { if (!timeStr) return 0; const [h, m] = timeStr.split(':').map(Number); return ((h + (m / 60)) / 24) * 2 * Math.PI; }
+        function calculateDurationNumeric(startAngle, endAngle) { let startHrs = (startAngle / (2 * Math.PI)) * 24, endHrs = (endAngle / (2 * Math.PI)) * 24, duration = endHrs - startHrs; if (duration < 0) duration += 24; return duration; }
+        function calculateDurationStr(startAngle, endAngle) { let durationHrs = calculateDurationNumeric(startAngle, endAngle); return `${Math.floor(durationHrs)}h ${Math.round((durationHrs - Math.floor(durationHrs)) * 60)}m`; }
+
+        function drawClock() {
+            ctx.clearRect(0, 0, logicalSize, logicalSize); ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI); ctx.fillStyle = '#fbf9f1'; ctx.fill();
+
+            scheduledSlots.forEach(slot => {
+                let wedgeColor = getTaskColor(slot);
+                drawWedge(slot.startAngle, slot.endAngle, wedgeColor, slot.completed ? 0.15 : 0.45);
+            });
+
+            if (isDragging && startAngle !== null && currentAngle !== null) drawWedge(startAngle, currentAngle, activeColor, 0.6);
+            let grad = ctx.createRadialGradient(centerX, centerY, radius - 5, centerX, centerY, radius + 15); grad.addColorStop(0, '#b09459'); grad.addColorStop(0.5, '#e6d39a'); grad.addColorStop(1, '#8c7340');
+            ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI); ctx.lineWidth = 14; ctx.strokeStyle = grad; ctx.stroke();
+            ctx.beginPath(); ctx.arc(centerX, centerY, radius - 7, 0, 2 * Math.PI); ctx.lineWidth = 1; ctx.strokeStyle = '#3e3326'; ctx.stroke();
+            ctx.beginPath(); ctx.arc(centerX, centerY, radius - 45, 0, 2 * Math.PI); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(62, 51, 38, 0.2)'; ctx.stroke();
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            for (let i = 1; i <= 24; i++) {
+                let angle = (i / 24) * 2 * Math.PI - (Math.PI / 2);
+                ctx.beginPath(); ctx.moveTo(centerX + Math.cos(angle) * (radius - 7), centerY + Math.sin(angle) * (radius - 7)); ctx.lineTo(centerX + Math.cos(angle) * (radius - 18), centerY + Math.sin(angle) * (radius - 18)); ctx.strokeStyle = '#3e3326'; ctx.lineWidth = 2; ctx.stroke();
+                let halfAngle = angle + (Math.PI / 24); ctx.beginPath(); ctx.arc(centerX + Math.cos(halfAngle) * (radius - 12), centerY + Math.sin(halfAngle) * (radius - 12), 1.5, 0, 2 * Math.PI); ctx.fillStyle = '#8c7340'; ctx.fill();
+                ctx.font = 'bold 18px "Georgia", serif'; ctx.fillStyle = '#3e3326'; ctx.fillText(i.toString(), centerX + Math.cos(angle) * (radius - 32), centerY + Math.sin(angle) * (radius - 32));
+            }
+            drawCurrentTimeHand();
+            ctx.beginPath(); ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI); ctx.fillStyle = '#b09459'; ctx.fill(); ctx.beginPath(); ctx.arc(centerX, centerY, 3, 0, 2 * Math.PI); ctx.fillStyle = '#3e3326'; ctx.fill();
+        }
+        function drawWedge(startAng, endAng, color, opacity) {
+            ctx.beginPath(); ctx.moveTo(centerX, centerY); let canvasStart = startAng - (Math.PI / 2), canvasEnd = endAng - (Math.PI / 2), diff = canvasEnd - canvasStart;
+            if (diff < 0) diff += 2 * Math.PI; ctx.arc(centerX, centerY, radius - 7, canvasStart, canvasStart + diff); ctx.fillStyle = color; ctx.globalAlpha = opacity; ctx.fill(); ctx.globalAlpha = 1.0;
+        }
+        function drawCurrentTimeHand() {
+            if (selectedDateStr !== getLocalTodayStr()) return;
+            const now = new Date(); const totalHours = now.getHours() + (now.getMinutes() / 60) + (now.getSeconds() / 3600); let angle = (totalHours / 24) * 2 * Math.PI - (Math.PI / 2);
+            ctx.beginPath(); ctx.moveTo(centerX, centerY); ctx.lineTo(centerX + Math.cos(angle) * (radius - 40), centerY + Math.sin(angle) * (radius - 40)); ctx.strokeStyle = 'var(--indicator-red)'; ctx.lineWidth = 2.5; ctx.stroke();
+            ctx.beginPath(); ctx.arc(centerX + Math.cos(angle) * (radius - 40), centerY + Math.sin(angle) * (radius - 40), 4, 0, 2 * Math.PI); ctx.fillStyle = 'var(--indicator-red)'; ctx.fill();
+        }
+
+        function addSubtaskInput(val = '') {
+            const div = document.createElement('div'); div.className = 'modal-subtask-row';
+            const input = document.createElement('input'); input.type = 'text'; input.className = 'subtask-input'; input.placeholder = 'Action step...'; input.value = val;
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSubtaskInput(); }});
+            const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn-remove-sub'; btn.innerHTML = 'X'; btn.onclick = () => div.remove();
+            div.appendChild(input); div.appendChild(btn); document.getElementById('modalSubtasks').appendChild(div); input.focus();
+        }
+        function getSubtasksFromModal() { const inputs = document.querySelectorAll('.subtask-input'); let subs = []; inputs.forEach(inp => { if (inp.value.trim() !== '') subs.push({ text: inp.value.trim(), done: false }); }); return subs; }
+        function populateSubtasksModal(subs) { document.getElementById('modalSubtasks').innerHTML = ''; if (subs) subs.forEach(s => addSubtaskInput(s.text)); }
+
+        canvas.addEventListener('mousedown', (e) => { isDragging = true; startAngle = currentAngle = getAngle(e); });
+        canvas.addEventListener('mousemove', (e) => { if (isDragging) { currentAngle = getAngle(e); drawClock(); } });
+
+        function finalizeDrag(e) {
+            if (isDragging) {
+                isDragging = false; currentAngle = getAngle(e);
+                if (Math.abs(currentAngle - startAngle) > 0.05) {
+                    editingTaskId = null; schedulingFromBacklogId = null; document.getElementById('taskModalTitle').innerText = "Schedule Task"; document.getElementById('taskTitle').value = ''; document.getElementById('taskNotes').value = ''; document.getElementById('taskGoal').value = customGoals.length > 0 ? customGoals[0] : 'Uncategorized'; document.getElementById('modalSubtasks').innerHTML = ''; document.getElementById('taskStartTime').value = angleToTimeStr(startAngle); document.getElementById('taskEndTime').value = angleToTimeStr(currentAngle); taskModal.showModal();
+                } else resetState();
+            }
+        }
+
+        canvas.addEventListener('mouseup', finalizeDrag);
+        canvas.addEventListener('mouseleave', finalizeDrag);
+
+        function openManualTaskModal() { editingTaskId = null; schedulingFromBacklogId = null; document.getElementById('taskModalTitle').innerText = "Manual Schedule"; document.getElementById('taskTitle').value = ''; document.getElementById('taskNotes').value = ''; document.getElementById('taskGoal').value = customGoals.length > 0 ? customGoals[0] : 'Uncategorized'; document.getElementById('modalSubtasks').innerHTML = ''; document.getElementById('taskStartTime').value = '09:00'; document.getElementById('taskEndTime').value = '10:00'; taskModal.showModal(); }
+
+        async function saveTask() {
+            const title = document.getElementById('taskTitle').value || 'Untitled Task', notes = document.getElementById('taskNotes').value, goal = document.getElementById('taskGoal').value, subs = getSubtasksFromModal(), startStr = document.getElementById('taskStartTime').value, endStr = document.getElementById('taskEndTime').value;
+            if (!startStr || !endStr) return alert("Valid times required.");
+            const nStart = timeStrToAngle(startStr), nEnd = timeStrToAngle(endStr);
+
+            if (editingTaskId !== null) {
+                let idx = scheduledSlots.findIndex(t => t.id === editingTaskId);
+                if (idx > -1) {
+                    let oldSubs = scheduledSlots[idx].subtasks || [];
+                    subs.forEach(newSub => { let match = oldSubs.find(o => o.text === newSub.text); if (match) newSub.done = match.done; });
+                    scheduledSlots[idx] = { ...scheduledSlots[idx], label: title, goal: goal, notes: notes, color: activeColor, startAngle: nStart, endAngle: nEnd, subtasks: subs };
+                    persistData(); taskModal.close(); resetState(); updateScheduleUI();
+                    queueTaskCloudSync(scheduledSlots[idx]);
+                }
+            } else {
+                const newTask = { id: genId(), startAngle: nStart, endAngle: nEnd, color: activeColor, label: title, goal: goal, notes: notes, review: null, completed: false, subtasks: subs, _unsynced: cloudReady };
+                scheduledSlots.push(newTask);
+                persistData(); taskModal.close(); resetState(); updateScheduleUI();
+                if (schedulingFromBacklogId !== null) {
+                    const removedId = schedulingFromBacklogId;
+                    backlogData = backlogData.filter(b => b.id !== removedId);
+                    storageAdapter.setItem('classicBacklog', JSON.stringify(backlogData));
+                    if (cloudReady) { sb.from('backlog_items').delete().eq('id', removedId).then(({ error }) => { if (error) console.warn(error); }); }
+                }
+                if (cloudReady) {
+                    try {
+                        const { data, error } = await sb.from('tasks').insert(taskToRow(newTask, selectedDateStr)).select().single();
+                        if (error) throw error;
+                        newTask.id = String(data.id);
+                        delete newTask._unsynced;
+                        persistData(); updateScheduleUI();
+                    } catch (e) {
+                        showToast('Saved locally — will retry cloud sync later.', 'warn');
+                    }
+                }
+            }
+        }
+
+        async function queueTaskCloudSync(task) {
+            if (!cloudReady) return;
+            try {
+                if (task._unsynced) {
+                    const { data, error } = await sb.from('tasks').insert(taskToRow(task, selectedDateStr)).select().single();
+                    if (error) throw error;
+                    task.id = String(data.id); delete task._unsynced; persistData(); updateScheduleUI();
+                } else {
+                    const { error } = await sb.from('tasks').update(taskToRow(task, selectedDateStr)).eq('id', task.id);
+                    if (error) throw error;
+                }
+            } catch (e) { showToast('Cloud sync failed for this change: ' + e.message, 'error'); }
+        }
+
+        function editTask(id) {
+            const t = scheduledSlots.find(x => x.id === id); if (!t) return;
+            editingTaskId = id; schedulingFromBacklogId = null;
+            document.getElementById('taskModalTitle').innerText = "Edit Task";
+            document.getElementById('taskTitle').value = t.label; document.getElementById('taskNotes').value = t.notes || ''; document.getElementById('taskGoal').value = t.goal || 'Uncategorized';
+            populateSubtasksModal(t.subtasks);
+            document.getElementById('taskStartTime').value = angleToTimeStr(t.startAngle); document.getElementById('taskEndTime').value = angleToTimeStr(t.endAngle);
+            activeColor = t.color;
+            document.querySelectorAll('.color-swatch').forEach(s => { s.classList.remove('active'); if (s.getAttribute('data-color') === activeColor) s.classList.add('active'); });
+            taskModal.showModal();
+        }
+
+        async function deleteTask(id) {
+            if (!confirm("Permanently wipe this entry?")) return;
+            const victim = scheduledSlots.find(t => t.id === id);
+            scheduledSlots = scheduledSlots.filter(t => t.id !== id);
+            persistData(); updateScheduleUI(); drawClock();
+            if (cloudReady && victim && !victim._unsynced) {
+                try { const { error } = await sb.from('tasks').delete().eq('id', id); if (error) throw error; }
+                catch (e) { showToast('Could not delete from cloud: ' + e.message, 'error'); }
+            }
+        }
+
+        async function toggleTaskStatus(id) {
+            let i = scheduledSlots.findIndex(t => t.id === id);
+            if (i > -1) {
+                scheduledSlots[i].completed = !scheduledSlots[i].completed;
+                if (scheduledSlots[i].subtasks) scheduledSlots[i].subtasks.forEach(s => s.done = scheduledSlots[i].completed);
+                persistData(); updateScheduleUI(); drawClock();
+                queueTaskCloudSync(scheduledSlots[i]);
+            }
+        }
+        async function toggleSubtask(taskId, subIndex) {
+            let i = scheduledSlots.findIndex(t => t.id === taskId);
+            if (i > -1 && scheduledSlots[i].subtasks) {
+                scheduledSlots[i].subtasks[subIndex].done = !scheduledSlots[i].subtasks[subIndex].done;
+                let allDone = scheduledSlots[i].subtasks.every(s => s.done);
+                scheduledSlots[i].completed = allDone;
+                persistData(); updateScheduleUI(); drawClock();
+                queueTaskCloudSync(scheduledSlots[i]);
+            }
+        }
+        function cancelTask() { taskModal.close(); resetState(); }
+        function resetState() { startAngle = currentAngle = editingTaskId = null; drawClock(); }
+
+        function openReviewModal(id) { activeReviewId = id; document.getElementById('reviewText').value = scheduledSlots.find(t => t.id === id).review || ''; reviewModal.showModal(); }
+        function saveReview() {
+            const text = document.getElementById('reviewText').value;
+            let i = scheduledSlots.findIndex(t => t.id === activeReviewId);
+            if (i > -1) {
+                scheduledSlots[i].review = text.trim() === '' ? null : text;
+                persistData();
+                queueTaskCloudSync(scheduledSlots[i]);
+            }
+            reviewModal.close(); activeReviewId = null; updateScheduleUI();
+        }
+
+        function setSortMode(mode) { sortMode = mode; document.getElementById('btnSortTime').classList.toggle('active', mode === 'time'); document.getElementById('btnSortGoal').classList.toggle('active', mode === 'goal'); updateScheduleUI(); }
+        function generateTaskHTML(s) {
+            const isC = s.completed;
+            let goalBadge = s.goal && s.goal !== 'Uncategorized' ? `<div class="slot-goal-badge">${escapeHtml(s.goal)}</div>` : '';
+            let unsyncedBadge = s._unsynced ? `<span class="unsynced-flag">Not Synced</span>` : '';
+            let displayColor = getTaskColor(s);
+            let html = `<div class="slot-item ${isC ? 'completed-card' : ''}" style="border-left-color:${displayColor}"><div class="slot-header"><div class="title-group"><input type="checkbox" class="task-checkbox" onchange="toggleTaskStatus('${s.id}')" ${isC ? 'checked' : ''}><div><p class="slot-title ${isC ? 'completed-text' : ''}">${escapeHtml(s.label)}${unsyncedBadge}</p>${sortMode === 'time' ? goalBadge : ''} <span class="slot-time">${angleToTimeStr(s.startAngle)} - ${angleToTimeStr(s.endAngle)}</span></div></div><span class="slot-duration">${calculateDurationStr(s.startAngle, s.endAngle)}</span></div>`;
+            if (s.subtasks && s.subtasks.length > 0) {
+                let completedSubs = s.subtasks.filter(sub => sub.done).length; let pct = Math.round((completedSubs / s.subtasks.length) * 100);
+                html += `<div class="progress-container"><div class="progress-bar" style="width: ${pct}%"></div></div><div class="subtasks-list">`;
+                s.subtasks.forEach((sub, idx) => { html += `<label class="subtask-item"><input type="checkbox" class="subtask-checkbox" onchange="toggleSubtask('${s.id}', ${idx})" ${sub.done ? 'checked' : ''}><span style="text-decoration: ${sub.done ? 'line-through' : 'none'}; color: ${sub.done ? '#aaa' : 'inherit'}">${escapeHtml(sub.text)}</span></label>`; });
+                html += `</div>`;
+            }
+            if (s.notes) html += `<p class="slot-notes ${isC ? 'completed-text' : ''}">${escapeHtml(s.notes)}</p>`;
+            if (s.review) html += `<div class="review-box"><strong>Retrospective:</strong><br>${escapeHtml(s.review)}</div>`;
+            html += `<div class="action-buttons"><button class="btn-action" onclick="openReviewModal('${s.id}')">✎ Retrospective</button><button class="btn-action" onclick="editTask('${s.id}')">⚙ Setup</button><button class="btn-action" onclick="deleteTask('${s.id}')">🗑 Wipe</button></div></div>`;
+            return html;
+        }
+        function updateScheduleUI() {
+            if (scheduledSlots.length === 0) { slotsList.innerHTML = '<p style="color: #888; text-align: center; margin-top: 50px;">The ledger is empty. Draw upon the clock face to begin.</p>'; return; }
+            slotsList.innerHTML = '';
+            if (sortMode === 'goal') {
+                const grouped = {}; scheduledSlots.forEach(s => { const g = (s.goal && s.goal !== 'Uncategorized') ? s.goal : 'Uncategorized'; if (!grouped[g]) grouped[g] = []; grouped[g].push(s); });
+                for (const [goalName, tasks] of Object.entries(grouped)) { slotsList.innerHTML += `<div class="goal-group-header">${escapeHtml(goalName)}</div>`; tasks.sort((a, b) => a.startAngle - b.startAngle).forEach(s => { slotsList.innerHTML += generateTaskHTML(s); }); }
+            } else { [...scheduledSlots].sort((a, b) => a.startAngle - b.startAngle).forEach(s => { slotsList.innerHTML += generateTaskHTML(s); }); }
+        }
+
+        // Roadmap & Journal
+        function openRoadmapModal() { const select = document.getElementById('roadmapGoalSelect'); select.innerHTML = ''; const activeGoals = customGoals.filter(g => g !== 'Uncategorized'); if (activeGoals.length === 0) { select.innerHTML = '<option value="">No goals created yet...</option>'; } else { activeGoals.forEach(g => { const opt = document.createElement('option'); opt.value = g; opt.innerText = g; select.appendChild(opt); }); } renderRoadmap(); roadmapModal.showModal(); }
+        function renderRoadmap() {
+            const goal = document.getElementById('roadmapGoalSelect').value, list = document.getElementById('milestonesList'), pBar = document.getElementById('roadmapProgressBar');
+            if (!goal) { list.innerHTML = '<p style="color: #888; font-style: italic;">Create a Master Goal first.</p>'; pBar.style.width = '0%'; return; }
+            let mList = milestonesData[goal] || [], completed = 0; list.innerHTML = '';
+            if (mList.length === 0) { list.innerHTML = '<p style="color: #888; font-style: italic; margin-top: 10px;">No milestones defined for this goal yet.</p>'; }
+            else {
+                mList.forEach((m) => {
+                    if (m.done) completed++;
+                    list.innerHTML += `<div class="milestone-item"><input type="checkbox" class="milestone-check" onchange="toggleMilestone('${escapeHtml(goal)}', '${m.id}')" ${m.done ? 'checked' : ''}><span class="milestone-text ${m.done ? 'done' : ''}">${escapeHtml(m.text)}</span><button onclick="deleteMilestone('${escapeHtml(goal)}', '${m.id}')" style="background: none; border: none; color: #c00; cursor: pointer; font-weight: bold; font-size: 0.9em;">✕</button></div>`;
+                });
+            }
+            pBar.style.width = mList.length > 0 ? Math.round((completed / mList.length) * 100) + '%' : '0%';
+        }
+        async function addMilestone() {
+            const goal = document.getElementById('roadmapGoalSelect').value, input = document.getElementById('newMilestoneInput'), text = input.value.trim();
+            if (!goal || !text) return;
+            if (!milestonesData[goal]) milestonesData[goal] = [];
+            const m = { id: genId(), text, done: false };
+            milestonesData[goal].push(m);
+            storageAdapter.setItem('classicMilestones', JSON.stringify(milestonesData));
+            input.value = ''; renderRoadmap();
+            const list = document.getElementById('milestonesList'); list.scrollTop = list.scrollHeight;
+            if (cloudReady) {
+                try {
+                    const { data, error } = await sb.from('milestones').insert({ goal, text, sort_order: milestonesData[goal].length }).select().single();
+                    if (error) throw error;
+                    m.id = String(data.id);
+                    storageAdapter.setItem('classicMilestones', JSON.stringify(milestonesData));
+                } catch (e) { showToast('Saved locally — cloud sync failed: ' + e.message, 'warn'); }
+            }
+        }
+        async function toggleMilestone(goal, id) {
+            const arr = milestonesData[goal]; if (!arr) return;
+            const m = arr.find(x => x.id === id); if (!m) return;
+            m.done = !m.done;
+            storageAdapter.setItem('classicMilestones', JSON.stringify(milestonesData));
+            renderRoadmap();
+            if (cloudReady) {
+                try { const { error } = await sb.from('milestones').update({ done: m.done }).eq('id', id); if (error) throw error; }
+                catch (e) { showToast('Could not sync milestone: ' + e.message, 'error'); }
+            }
+        }
+        async function deleteMilestone(goal, id) {
+            if (!confirm("Delete this milestone?")) return;
+            milestonesData[goal] = (milestonesData[goal] || []).filter(x => x.id !== id);
+            storageAdapter.setItem('classicMilestones', JSON.stringify(milestonesData));
+            renderRoadmap();
+            if (cloudReady) {
+                try { const { error } = await sb.from('milestones').delete().eq('id', id); if (error) throw error; }
+                catch (e) { showToast('Could not delete from cloud: ' + e.message, 'error'); }
+            }
+        }
+
+        function openJournalModal() { switchJournalTab('daily'); journalModal.showModal(); }
+        function switchJournalTab(tab) {
+            saveCurrentJournalText();
+            currentJournalTab = tab;
+            document.getElementById('btnTabDaily').classList.toggle('active', tab === 'daily');
+            document.getElementById('btnTabMaster').classList.toggle('active', tab === 'master');
+            if (tab === 'daily') {
+                const d = new Date(selectedDateStr + 'T12:00:00');
+                document.getElementById('journalModalTitle').innerText = "Daily Status: " + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                document.getElementById('journalText').value = journalsByDate[selectedDateStr] || '';
+                document.getElementById('journalText').placeholder = "Plan today's exact routine...";
+            } else {
+                document.getElementById('journalModalTitle').innerText = "Master Journey & Strategy";
+                document.getElementById('journalText').value = masterJournalText;
+                document.getElementById('journalText').placeholder = "Outline your long-term goals...";
+            }
+        }
+        function saveCurrentJournalText() {
+            const text = document.getElementById('journalText').value;
+            if (currentJournalTab === 'daily') {
+                if (text.trim() === '') delete journalsByDate[selectedDateStr];
+                else journalsByDate[selectedDateStr] = text;
+                storageAdapter.setItem('classicJournals', JSON.stringify(journalsByDate));
+                if (cloudReady) {
+                    const dateStr = selectedDateStr;
+                    sb.from('daily_journals').upsert({ date: dateStr, content: text.trim() === '' ? null : text }, { onConflict: 'user_id,date' })
+                        .then(({ error }) => { if (error) showToast('Journal cloud sync failed: ' + error.message, 'error'); });
+                }
+            } else {
+                masterJournalText = text;
+                storageAdapter.setItem('classicMasterJournal', masterJournalText);
+                if (cloudReady) {
+                    sb.from('master_journal').upsert({ content: masterJournalText }, { onConflict: 'user_id' })
+                        .then(({ error }) => { if (error) showToast('Journal cloud sync failed: ' + error.message, 'error'); });
+                }
+            }
+        }
+        function saveJournal() { saveCurrentJournalText(); journalModal.close(); showToast('Journal saved.', 'success'); }
+
+        // --- Goal Ink Management ---
+        function openGoalColorModal() {
+            const list = document.getElementById('goalColorList');
+            list.innerHTML = '';
+            const activeGoals = customGoals.filter(g => g !== 'Uncategorized');
+            if (activeGoals.length === 0) {
+                list.innerHTML = '<p style="color:#888; font-style:italic; text-align:center;">Create a Master Goal first to assign an ink.</p>';
+            } else {
+                activeGoals.forEach(g => {
+                    const currentColor = goalColors[g] || '#3e3326';
+                    list.innerHTML += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e3d9c8;">
+                            <span style="font-weight: bold; color: var(--primary-color); font-size: 0.95em;">${escapeHtml(g)}</span>
+                            <input type="color" class="goal-color-input" data-goal="${escapeHtml(g)}" value="${currentColor}" style="border:none; width:35px; height:35px; cursor:pointer; padding:0; background:none;">
+                        </div>
+                    `;
+                });
+            }
+            goalColorModal.showModal();
+        }
+
+        async function saveGoalColors() {
+            const changed = [];
+            document.querySelectorAll('.goal-color-input').forEach(input => {
+                const goalName = input.getAttribute('data-goal');
+                if (goalColors[goalName] !== input.value) {
+                    goalColors[goalName] = input.value;
+                    changed.push(goalName);
+                }
+            });
+            storageAdapter.setItem('classicGoalColors', JSON.stringify(goalColors));
+            goalColorModal.close();
+            updateScheduleUI();
+            drawClock();
+            if (cloudReady && changed.length > 0) {
+                for (const g of changed) {
+                    try { const { error } = await sb.from('goals').update({ color: goalColors[g] }).eq('name', g); if (error) throw error; }
+                    catch (e) { showToast('Could not sync ink color for "' + g + '": ' + e.message, 'error'); }
+                }
+                showToast('Goal inks saved and synced.', 'success');
+            } else if (changed.length > 0) {
+                showToast('Goal inks saved.', 'success');
+            }
+        }
+
+        // ====================================================================
+        // Advanced Archives Logic
+        // ====================================================================
+        async function openInsightsModal() {
+            if (cloudReady) {
+                const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 29);
+                const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                try { await pullTaskRangeForArchives(fmt(start), fmt(end)); } catch (e) { showToast('Could not refresh archives from cloud: ' + e.message, 'error'); }
+            }
+            generateInsights();
+            insightsModal.showModal();
+        }
+
+        function generateInsights() {
+            let totalPlanned = 0, totalCompleted = 0, activeDaysCount = 0;
+            const baseDate = new Date();
+            const grid = document.getElementById('heatmapGrid'); grid.innerHTML = '';
+            const breakdownList = document.getElementById('goalBreakdownList'); breakdownList.innerHTML = '';
+
+            let goalHoursMap = {};
+            customGoals.forEach(g => goalHoursMap[g] = 0);
+            goalHoursMap['Uncategorized'] = 0;
+
+            for (let i = 29; i >= 0; i--) {
+                const d = new Date(baseDate); d.setDate(d.getDate() - i);
+                const loopDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                const niceDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                let dayHours = 0;
+                if (tasksByDate[loopDateStr] && tasksByDate[loopDateStr].length > 0) {
+                    activeDaysCount++;
+                    tasksByDate[loopDateStr].forEach(task => {
+                        let dur = calculateDurationNumeric(task.startAngle, task.endAngle);
+                        dayHours += dur; totalPlanned += dur;
+                        if (task.completed) totalCompleted += dur;
+
+                        let gKey = task.goal && goalHoursMap.hasOwnProperty(task.goal) ? task.goal : 'Uncategorized';
+                        goalHoursMap[gKey] += dur;
+                    });
+                }
+                let heatClass = 'heat-0';
+                if (dayHours > 0 && dayHours <= 2) heatClass = 'heat-1';
+                else if (dayHours > 2 && dayHours <= 5) heatClass = 'heat-2';
+                else if (dayHours > 5 && dayHours <= 8) heatClass = 'heat-3';
+                else if (dayHours > 8) heatClass = 'heat-4';
+                grid.innerHTML += `<div class="heat-day ${heatClass}" data-info="${escapeHtml(niceDate)}: ${dayHours.toFixed(1)}h logged"></div>`;
+            }
+
+            document.getElementById('statPlanned').innerText = totalPlanned.toFixed(1) + 'h';
+            document.getElementById('statCompleted').innerText = totalCompleted.toFixed(1) + 'h';
+            let disciplineRate = totalPlanned > 0 ? Math.round((totalCompleted / totalPlanned) * 100) : 0;
+            document.getElementById('statRate').innerText = disciplineRate + '%';
+            document.getElementById('statStreak').innerText = activeDaysCount;
+
+            let totalGoalHours = Object.values(goalHoursMap).reduce((a, b) => a + b, 0);
+            for (const [goalName, hrs] of Object.entries(goalHoursMap)) {
+                if (hrs > 0 || customGoals.includes(goalName)) {
+                    let pct = totalGoalHours > 0 ? Math.round((hrs / totalGoalHours) * 100) : 0;
+                    breakdownList.innerHTML += `
+                        <div class="goal-breakdown-row">
+                            <span><strong>${escapeHtml(goalName)}</strong></span>
+                            <span>${hrs.toFixed(1)}h total (${pct}%)</span>
+                        </div>
+                    `;
+                }
+            }
+            if (breakdownList.innerHTML === '') {
+                breakdownList.innerHTML = '<p style="color:#888; font-style:italic; text-align:center;">No goal allocations recorded yet.</p>';
+            }
+        }
+
+        function exportPerformanceReport() {
+            let totalPlanned = document.getElementById('statPlanned').innerText;
+            let totalCompleted = document.getElementById('statCompleted').innerText;
+            let disciplineRate = document.getElementById('statRate').innerText;
+            let activeDays = document.getElementById('statStreak').innerText;
+
+            let report = `=== COMMAND CENTER PERFORMANCE REPORT ===\n`;
+            report += `Generated: ${new Date().toLocaleString()}\n`;
+            report += `----------------------------------------\n`;
+            report += `• Total Hours Planned: ${totalPlanned}\n`;
+            report += `• Total Hours Executed: ${totalCompleted}\n`;
+            report += `• Discipline Efficiency Rate: ${disciplineRate}\n`;
+            report += `• Active Tracking Days (Last 30): ${activeDays}\n`;
+            report += `========================================\n`;
+
+            navigator.clipboard.writeText(report).then(() => {
+                showToast('Performance summary copied to clipboard, Commander!', 'success');
+            }).catch(err => {
+                showToast('Failed to copy report to clipboard.', 'error');
+            });
+        }
+
+        function exportData(type) {
+            let dataStr = "", fileName = "", mimeType = "";
+            if (type === 'json') {
+                dataStr = JSON.stringify({
+                    tasks: tasksByDate, journals: journalsByDate, masterJournal: masterJournalText, milestones: milestonesData, backlog: backlogData, goals: customGoals, goalColors: goalColors
+                }, null, 2);
+                fileName = "classic_planner_export.json"; mimeType = "application/json";
+            } else if (type === 'csv') {
+                fileName = "classic_planner_export.csv"; mimeType = "text/csv;charset=utf-8;";
+                dataStr = "Date,Goal,Task,StartTime,EndTime,DurationHrs,Completed,Notes,Review\n";
+                for (const [dateKey, tasks] of Object.entries(tasksByDate)) {
+                    const safeDate = `="${dateKey}"`;
+                    tasks.forEach(t => {
+                        const start = angleToTimeStr(t.startAngle), end = angleToTimeStr(t.endAngle), dur = calculateDurationNumeric(t.startAngle, t.endAngle).toFixed(2);
+                        const safeGoal = `"${(t.goal || 'Uncategorized').replace(/"/g, '""')}"`;
+                        const safeLabel = `"${(t.label || '').replace(/"/g, '""')}"`;
+                        const safeNotes = `"${(t.notes || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
+                        const safeReview = `"${(t.review || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
+                        dataStr += `${safeDate},${safeGoal},${safeLabel},${start},${end},${dur},${t.completed},${safeNotes},${safeReview}\n`;
+                    });
+                }
+            }
+            const blob = new Blob(["\uFEFF" + dataStr], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = fileName;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
