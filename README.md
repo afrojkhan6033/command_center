@@ -4,7 +4,9 @@
 
 <div align="center">
 
-<img src="./assets/banner.jpg" alt="24-Hour Command Center" width="100%" style="border-radius:12px"/>
+<img src="./assets/banner.jpg" alt="24-Hour Command Center — Visual Scheduling · AI-Powered · Cloud Sync" width="100%"/>
+
+<br/>
 
 <br/><br/>
 
